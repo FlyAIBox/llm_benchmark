@@ -1,51 +1,63 @@
-# SPDX-License-Identifier: Apache-2.0
+# 文件: backend_request_func.py
+# 功能: vLLM压测后端请求处理函数集合
+# 许可证: Apache-2.0
 
-import io
-import json
-import os
-import sys
-import time
-import traceback
-from dataclasses import dataclass, field
-from typing import Optional, Union
+import io                                          # 输入输出流处理
+import json                                        # JSON数据处理
+import os                                          # 操作系统接口
+import sys                                         # 系统相关参数和函数
+import time                                        # 时间相关功能
+import traceback                                   # 异常追踪
+from dataclasses import dataclass, field          # 数据类和字段定义
+from typing import Optional, Union                 # 类型提示
 
-import aiohttp
-import huggingface_hub.constants
-from tqdm.asyncio import tqdm
+import aiohttp                                     # 异步HTTP客户端
+import huggingface_hub.constants                   # HuggingFace Hub常量
+from tqdm.asyncio import tqdm                      # 异步进度条
 from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
-# NOTE(simon): do not import vLLM here so the benchmark script
-# can run without vLLM installed.
+# 注意: 这里不导入vLLM，这样压测脚本可以在没有安装vLLM的环境中运行
 
+# HTTP请求超时设置：6小时（用于长时间运行的推理任务）
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 
 
 @dataclass
 class RequestFuncInput:
-    prompt: str
-    api_url: str
-    prompt_len: int
-    output_len: int
-    model: str
-    model_name: Optional[str] = None
-    logprobs: Optional[int] = None
-    extra_body: Optional[dict] = None
-    multi_modal_content: Optional[dict] = None
-    ignore_eos: bool = False
-    language: Optional[str] = None
+    """
+    请求函数输入数据结构
+    
+    封装了发送给推理服务的所有必要参数
+    """
+    prompt: str                                    # 输入提示文本
+    api_url: str                                   # API服务端点URL
+    prompt_len: int                                # 提示文本的token长度
+    output_len: int                                # 期望的输出token长度
+    model: str                                     # 模型标识符
+    model_name: Optional[str] = None               # 模型显示名称（可选）
+    logprobs: Optional[int] = None                 # 返回的对数概率数量（可选）
+    extra_body: Optional[dict] = None              # 额外的请求体参数（可选）
+    multi_modal_content: Optional[dict] = None     # 多模态内容（如图像、音频等，可选）
+    ignore_eos: bool = False                       # 是否忽略结束符token
+    language: Optional[str] = None                 # 语言设置（可选）
 
 
 @dataclass
 class RequestFuncOutput:
-    generated_text: str = ""
-    success: bool = False
-    latency: float = 0.0
-    output_tokens: int = 0
-    ttft: float = 0.0  # Time to first token
-    itl: list[float] = field(default_factory=list)  # list of inter-token latencies
-    tpot: float = 0.0  # avg next-token latencies
-    prompt_len: int = 0
-    error: str = ""
+    """
+    请求函数输出数据结构
+    
+    包含了推理请求的结果和性能指标
+    """
+    generated_text: str = ""                       # 生成的文本内容
+    success: bool = False                          # 请求是否成功
+    latency: float = 0.0                          # 总延迟时间（秒）
+    output_tokens: int = 0                         # 实际输出的token数量
+    ttft: float = 0.0                             # 首token时间（Time to First Token，秒）
+    itl: list[float] = field(default_factory=list) # token间延迟列表（Inter-Token Latency，秒）
+    tpot: float = 0.0                             # 平均每token输出时间（Time per Output Token，秒）
+    prompt_len: int = 0                           # 提示文本长度
+    error: str = ""                               # 错误信息（如果有）
 
 
 async def async_request_tgi(
@@ -248,99 +260,130 @@ async def async_request_openai_completions(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
 ) -> RequestFuncOutput:
+    """
+    异步发送OpenAI Completions API请求
+    
+    这个函数处理与OpenAI兼容的文本补全API的通信，支持流式响应，
+    并收集详细的性能指标（TTFT、ITL等）。
+    
+    参数:
+        request_func_input: 请求输入参数
+        pbar: 可选的进度条对象
+        
+    返回:
+        RequestFuncOutput: 包含生成文本和性能指标的输出对象
+    """
     api_url = request_func_input.api_url
+    # 验证API URL格式
     assert api_url.endswith(("completions", "profile")), (
-        "OpenAI Completions API URL must end with 'completions' or 'profile'."
+        "OpenAI Completions API URL必须以'completions'或'profile'结尾。"
     )
 
+    # 创建异步HTTP会话
     async with aiohttp.ClientSession(
         trust_env=True, timeout=AIOHTTP_TIMEOUT
     ) as session:
-        ### Revised: Add min_tokens to the payload
-        ### to ensure the model generates at least the specified number of tokens.
+        # 构建请求负载
+        # 注意：添加min_tokens确保模型生成至少指定数量的token
         payload = {
             "model": request_func_input.model_name
             if request_func_input.model_name
-            else request_func_input.model,
-            "prompt": request_func_input.prompt,
-            "temperature": 0.0,
-            "repetition_penalty": 1.0,
-            "max_tokens": request_func_input.output_len,
-            "min_tokens": request_func_input.output_len,
-            "logprobs": request_func_input.logprobs,
-            "stream": True,
-            
+            else request_func_input.model,              # 模型名称
+            "prompt": request_func_input.prompt,         # 输入提示
+            "temperature": 0.0,                          # 温度参数（0.0表示确定性输出）
+            "repetition_penalty": 1.0,                   # 重复惩罚
+            "max_tokens": request_func_input.output_len, # 最大输出token数
+            "min_tokens": request_func_input.output_len, # 最小输出token数
+            "logprobs": request_func_input.logprobs,     # 对数概率
+            "stream": True,                              # 启用流式响应
             "stream_options": {
-                "include_usage": True,
+                "include_usage": True,                   # 包含使用统计信息
             },
         }
+        
+        # 添加可选参数
         if request_func_input.ignore_eos:
             payload["ignore_eos"] = request_func_input.ignore_eos
         if request_func_input.extra_body:
             payload.update(request_func_input.extra_body)
+            
+        # 设置认证头
         headers = {"Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}"}
 
+        # 初始化输出对象
         output = RequestFuncOutput()
         output.prompt_len = request_func_input.prompt_len
 
-        generated_text = ""
-        st = time.perf_counter()
-        most_recent_timestamp = st
+        generated_text = ""                              # 累积生成的文本
+        st = time.perf_counter()                        # 请求开始时间
+        most_recent_timestamp = st                       # 最近的时间戳
+        
         try:
+            # 发送POST请求
             async with session.post(
                 url=api_url, json=payload, headers=headers
             ) as response:
                 if response.status == 200:
-                    first_chunk_received = False
+                    first_chunk_received = False         # 是否收到第一个数据块
+                    
+                    # 处理流式响应
                     async for chunk_bytes in response.content:
                         chunk_bytes = chunk_bytes.strip()
                         if not chunk_bytes:
                             continue
 
+                        # 解析数据块
                         chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
                         if chunk != "[DONE]":
                             data = json.loads(chunk)
 
-                            # NOTE: Some completion API might have a last
-                            # usage summary response without a token so we
-                            # want to check a token was generated
+                            # 注意：某些completion API可能在最后返回不包含token的使用统计响应
+                            # 所以我们需要检查是否生成了token
                             if choices := data.get("choices"):
-                                # Note that text could be empty here
-                                # e.g. for special tokens
+                                # 注意：text可能为空，例如特殊token的情况
                                 text = choices[0].get("text")
                                 timestamp = time.perf_counter()
-                                # First token
+                                
+                                # 处理第一个token（计算TTFT）
                                 if not first_chunk_received:
                                     first_chunk_received = True
                                     ttft = time.perf_counter() - st
                                     output.ttft = ttft
 
-                                # Decoding phase
+                                # 解码阶段（计算ITL）
                                 else:
                                     output.itl.append(timestamp - most_recent_timestamp)
 
                                 most_recent_timestamp = timestamp
                                 generated_text += text or ""
+                                
+                            # 处理使用统计信息
                             elif usage := data.get("usage"):
                                 output.output_tokens = usage.get("completion_tokens")
+                                
+                    # 设置最终结果
                     if first_chunk_received:
                         output.success = True
                     else:
                         output.success = False
                         output.error = (
-                            "Never received a valid chunk to calculate TTFT."
-                            "This response will be marked as failed!"
+                            "从未收到有效数据块来计算TTFT。"
+                            "此响应将被标记为失败！"
                         )
                     output.generated_text = generated_text
                     output.latency = most_recent_timestamp - st
                 else:
+                    # HTTP错误处理
                     output.error = response.reason or ""
                     output.success = False
+                    
         except Exception:
+            # 异常处理
             output.success = False
             exc_info = sys.exc_info()
             output.error = "".join(traceback.format_exception(*exc_info))
 
+    # 更新进度条
     if pbar:
         pbar.update(1)
     return output

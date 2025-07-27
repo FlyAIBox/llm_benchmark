@@ -1,17 +1,29 @@
-# SPDX-License-Identifier: Apache-2.0
-"""
-This module defines a framework for sampling benchmark requests from various
-datasets. Each dataset subclass of BenchmarkDataset must implement sample
-generation. Supported dataset types include:
-  - ShareGPT
-  - Random (synthetic)
-  - Sonnet
-  - BurstGPT
-  - HuggingFace
-  - VisionArena
+# 文件: benchmark_dataset.py
+# 功能: vLLM压测数据集处理框架
+# 许可证: Apache-2.0
 
-TODO: Implement CustomDataset to parse a JSON file and convert its contents into
-SampleRequest instances, similar to the approach used in ShareGPT.
+"""
+vLLM压测数据集处理模块
+
+本模块定义了从各种数据集中采样压测请求的框架。每个BenchmarkDataset的子类
+都必须实现样本生成功能。支持的数据集类型包括：
+
+数据集类型:
+  - ShareGPT: 对话数据集，来自ShareGPT项目
+  - Random: 合成随机数据集，用于基础性能测试
+  - Sonnet: 诗歌数据集，用于文学文本生成测试
+  - BurstGPT: BurstGPT数据集，用于突发负载测试
+  - HuggingFace: HuggingFace Hub上的各种数据集
+  - VisionArena: 视觉竞技场数据集，支持多模态输入
+  - ConversationDataset: 通用对话数据集
+  - InstructCoderDataset: 代码指令数据集
+  - MTBenchDataset: MT-Bench多轮对话评测数据集
+  - AIMODataset: AIMO数学竞赛数据集
+  - ASRDataset: 自动语音识别数据集
+  - NextEditPredictionDataset: 下一步编辑预测数据集
+
+TODO: 实现CustomDataset来解析JSON文件并将其内容转换为SampleRequest实例，
+      类似于ShareGPT中使用的方法。
 """
 
 import base64
@@ -47,14 +59,17 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SampleRequest:
     """
-    Represents a single inference request for benchmarking.
+    表示单个推理请求的数据结构
+    
+    这个类封装了压测中单个请求的所有必要信息，包括输入提示、
+    长度信息、多模态数据和LoRA配置等。
     """
 
-    prompt: Union[str, Any]
-    prompt_len: int
-    expected_output_len: int
-    multi_modal_data: Optional[Union[MultiModalDataDict, dict]] = None
-    lora_request: Optional[LoRARequest] = None
+    prompt: Union[str, Any]                                      # 输入提示文本或其他格式
+    prompt_len: int                                              # 提示文本的token长度
+    expected_output_len: int                                     # 期望的输出token长度
+    multi_modal_data: Optional[Union[MultiModalDataDict, dict]] = None  # 多模态数据（图像、音频等）
+    lora_request: Optional[LoRARequest] = None                   # LoRA适配器请求配置
 
 
 # -----------------------------------------------------------------------------
@@ -63,8 +78,14 @@ class SampleRequest:
 
 
 class BenchmarkDataset(ABC):
-    DEFAULT_SEED = 0
-    IS_MULTIMODAL = False
+    """
+    压测数据集基类
+    
+    所有压测数据集的抽象基类，定义了数据集处理的通用接口和方法。
+    子类必须实现load_data()和sample()方法。
+    """
+    DEFAULT_SEED = 0          # 默认随机种子
+    IS_MULTIMODAL = False     # 是否为多模态数据集
 
     def __init__(
         self,
@@ -72,18 +93,18 @@ class BenchmarkDataset(ABC):
         random_seed: int = DEFAULT_SEED,
     ) -> None:
         """
-        Initialize the BenchmarkDataset with an optional dataset path and random
-        seed.  Args:
-            dataset_path (Optional[str]): Path to the dataset. If None, it
-            indicates that a default or random dataset might be used.
-            random_seed (int): Seed value for reproducible shuffling or
-            sampling. Defaults to DEFAULT_SEED.
+        初始化压测数据集
+        
+        参数:
+            dataset_path: 数据集路径（可选）
+                         如果为None，表示可能使用默认或随机数据集
+            random_seed: 随机种子，用于可重现的洗牌或采样
+                        默认为DEFAULT_SEED
         """
         self.dataset_path = dataset_path
-        # Set the random seed, ensuring that a None value is replaced with the
-        # default seed.
+        # 设置随机种子，确保None值被替换为默认种子
         self.random_seed = random_seed if random_seed is not None else self.DEFAULT_SEED
-        self.data = None
+        self.data = None          # 数据集内容，由子类的load_data()方法填充
 
     def apply_multimodal_chat_transformation(
         self, prompt: str, mm_content: Optional[MultiModalDataDict] = None
@@ -284,11 +305,20 @@ def process_image(image: Any) -> Mapping[str, Any]:
 
 
 class RandomDataset(BenchmarkDataset):
-    # Default values copied from benchmark_serving.py for the random dataset.
-    DEFAULT_PREFIX_LEN = 0
-    DEFAULT_RANGE_RATIO = 0.0
-    DEFAULT_INPUT_LEN = 1024
-    DEFAULT_OUTPUT_LEN = 128
+    """
+    随机数据集实现类
+    
+    生成合成的随机token序列作为压测数据。这种数据集主要用于：
+    1. 基础性能测试，不受具体文本内容影响
+    2. 控制输入输出长度的精确测试
+    3. 大规模压测时避免真实数据集的版权问题
+    """
+    
+    # 默认参数值（从benchmark_serving.py复制）
+    DEFAULT_PREFIX_LEN = 0      # 默认前缀长度
+    DEFAULT_RANGE_RATIO = 0.0   # 默认长度变化范围比例
+    DEFAULT_INPUT_LEN = 1024    # 默认输入长度
+    DEFAULT_OUTPUT_LEN = 128    # 默认输出长度
 
     def __init__(
         self,
@@ -306,55 +336,77 @@ class RandomDataset(BenchmarkDataset):
         output_len: int = DEFAULT_OUTPUT_LEN,
         **kwargs,
     ) -> list[SampleRequest]:
-        # Enforce range_ratio < 1
+        """
+        生成随机样本请求
+        
+        参数:
+            tokenizer: 分词器，用于生成和解码token序列
+            num_requests: 要生成的请求数量
+            prefix_len: 前缀token长度
+            range_ratio: 长度变化范围比例，用于生成不同长度的请求
+            input_len: 基础输入长度
+            output_len: 基础输出长度
+            
+        返回:
+            list[SampleRequest]: 生成的样本请求列表
+        """
+        # 确保range_ratio小于1，以保证有效的采样范围
         assert range_ratio < 1.0, (
-            "random_range_ratio must be < 1.0 to ensure a valid sampling range"
+            "random_range_ratio必须小于1.0以确保有效的采样范围"
         )
 
-        vocab_size = tokenizer.vocab_size
-        num_special_tokens = tokenizer.num_special_tokens_to_add()
-        real_input_len = input_len - num_special_tokens
+        vocab_size = tokenizer.vocab_size                    # 词汇表大小
+        num_special_tokens = tokenizer.num_special_tokens_to_add()  # 特殊token数量
+        real_input_len = input_len - num_special_tokens      # 实际输入长度（减去特殊token）
 
+        # 生成前缀token序列（如果需要）
         prefix_token_ids = (
             np.random.randint(0, vocab_size, size=prefix_len).tolist()
             if prefix_len > 0
             else []
         )
 
-        # New sampling logic: [X * (1 - b), X * (1 + b)]
-        input_low = int(real_input_len * (1 - range_ratio))
-        input_high = int(real_input_len * (1 + range_ratio))
-        output_low = int(output_len * (1 - range_ratio))
-        output_high = int(output_len * (1 + range_ratio))
+        # 新的采样逻辑：在[X * (1 - b), X * (1 + b)]范围内采样
+        input_low = int(real_input_len * (1 - range_ratio))   # 输入长度下限
+        input_high = int(real_input_len * (1 + range_ratio))  # 输入长度上限
+        output_low = int(output_len * (1 - range_ratio))      # 输出长度下限
+        output_high = int(output_len * (1 + range_ratio))     # 输出长度上限
 
-        # Add logging for debugging
-        logger.info("Sampling input_len from [%s, %s]", input_low, input_high)
-        logger.info("Sampling output_len from [%s, %s]", output_low, output_high)
+        # 记录采样范围用于调试
+        logger.info("从[%s, %s]范围采样input_len", input_low, input_high)
+        logger.info("从[%s, %s]范围采样output_len", output_low, output_high)
 
+        # 为每个请求随机生成长度
         input_lens = np.random.randint(input_low, input_high + 1, size=num_requests)
         output_lens = np.random.randint(output_low, output_high + 1, size=num_requests)
-        offsets = np.random.randint(0, vocab_size, size=num_requests)
+        offsets = np.random.randint(0, vocab_size, size=num_requests)  # 随机偏移量
 
         requests = []
         for i in range(num_requests):
+            # 生成内部token序列：使用偏移量和索引确保每个请求的唯一性
             inner_seq = (
                 (offsets[i] + i + np.arange(input_lens[i])) % vocab_size
             ).tolist()
+            
+            # 组合前缀和内部序列
             token_sequence = prefix_token_ids + inner_seq
             prompt = tokenizer.decode(token_sequence)
-            # After decoding the prompt we have to encode and decode it again.
-            # This is done because in some cases N consecutive tokens
-            # give a string tokenized into != N number of tokens.
-            # For example for GPT2Tokenizer:
+            
+            # 重要：解码后需要重新编码再解码
+            # 这是因为在某些情况下，N个连续token解码后的字符串
+            # 重新分词可能不等于N个token
+            # 例如GPT2Tokenizer：
             # [6880, 6881] -> ['Ġcalls', 'here'] ->
             # [1650, 939, 486] -> ['Ġcall', 'sh', 'ere']
-            # To avoid uncontrolled change of the prompt length,
-            # the encoded sequence is truncated before being decode again.
+            # 为避免提示长度的不受控变化，在重新解码前截断编码序列
             re_encoded_sequence = tokenizer.encode(prompt, add_special_tokens=False)[
                 : input_lens[i]
             ]
             prompt = tokenizer.decode(re_encoded_sequence)
+            
+            # 计算总输入长度
             total_input_len = prefix_len + int(input_lens[i])
+            
             requests.append(
                 SampleRequest(
                     prompt=prompt,

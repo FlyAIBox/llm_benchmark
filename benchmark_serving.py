@@ -1,108 +1,141 @@
-# SPDX-License-Identifier: Apache-2.0
-r"""Benchmark online serving throughput.
+# 文件: benchmark_serving.py
+# 功能: vLLM在线推理服务吞吐量压测工具
+# 许可证: Apache-2.0
 
-On the server side, run one of the following commands:
-    vLLM OpenAI API server
+r"""
+vLLM在线推理服务性能压测工具
+
+这个脚本用于测试vLLM推理服务的性能指标，包括：
+- 吞吐量 (Throughput)
+- 延迟 (Latency) 
+- 首token时间 (Time to First Token, TTFT)
+- token间延迟 (Inter-token Latency, ITL)
+- 每token输出时间 (Time per Output Token, TPOT)
+
+使用方法:
+
+1. 服务端启动vLLM OpenAI兼容API服务器:
     vllm serve <your_model> \
         --swap-space 16 \
         --disable-log-requests
 
-On the client side, run:
-    python benchmarks/benchmark_serving.py \
+2. 客户端运行压测脚本:
+    python benchmark_serving.py \
         --backend <backend> \
         --model <your_model> \
         --dataset-name sharegpt \
         --dataset-path <path to dataset> \
-        --request-rate <request_rate> \ # By default <request_rate> is inf
-        --num-prompts <num_prompts> # By default <num_prompts> is 1000
+        --request-rate <request_rate> \    # 默认为inf（无限制）
+        --num-prompts <num_prompts>        # 默认为1000
 
-    when using tgi backend, add
+    使用TGI后端时，需要添加:
         --endpoint /generate_stream
-    to the end of the command above.
 """
 
-import argparse
-import asyncio
-import gc
-import json
-import os
-import random
-import time
-import warnings
-from collections.abc import AsyncGenerator, Iterable
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Optional
+# 导入必要的Python标准库和第三方库
+import argparse                                    # 命令行参数解析
+import asyncio                                     # 异步编程支持
+import gc                                          # 垃圾回收控制
+import json                                        # JSON数据处理
+import os                                          # 操作系统接口
+import random                                      # 随机数生成
+import time                                        # 时间相关功能
+import warnings                                    # 警告处理
+from collections.abc import AsyncGenerator, Iterable  # 异步生成器和可迭代对象类型
+from dataclasses import dataclass                 # 数据类装饰器
+from datetime import datetime                      # 日期时间处理
+from typing import Any, Optional                   # 类型提示
 
-import numpy as np
-from tqdm.asyncio import tqdm
-from transformers import PreTrainedTokenizerBase
+import numpy as np                                 # 数值计算库
+from tqdm.asyncio import tqdm                      # 异步进度条
+from transformers import PreTrainedTokenizerBase   # HuggingFace分词器基类
 
+# 导入后端请求处理相关模块
 from backend_request_func import (
-    ASYNC_REQUEST_FUNCS,
-    OPENAI_COMPATIBLE_BACKENDS,
-    RequestFuncInput,
-    RequestFuncOutput,
+    ASYNC_REQUEST_FUNCS,           # 异步请求函数映射
+    OPENAI_COMPATIBLE_BACKENDS,    # OpenAI兼容后端列表
+    RequestFuncInput,              # 请求输入数据结构
+    RequestFuncOutput,             # 请求输出数据结构
 )
 
+# 尝试从vLLM导入分词器，如果失败则从后端请求模块导入
 try:
     from vllm.transformers_utils.tokenizer import get_tokenizer
 except ImportError:
     from backend_request_func import get_tokenizer
 
+# 尝试使用vLLM的灵活参数解析器，如果失败则使用标准解析器
 try:
     from vllm.utils import FlexibleArgumentParser
 except ImportError:
     from argparse import ArgumentParser as FlexibleArgumentParser
 
+# 导入各种数据集处理类
 from benchmark_dataset import (
-    AIMODataset,
-    ASRDataset,
-    BurstGPTDataset,
-    ConversationDataset,
-    HuggingFaceDataset,
-    InstructCoderDataset,
-    MTBenchDataset,
-    NextEditPredictionDataset,
-    RandomDataset,
-    SampleRequest,
-    ShareGPTDataset,
-    SonnetDataset,
-    VisionArenaDataset,
+    AIMODataset,                   # AIMO数学竞赛数据集
+    ASRDataset,                    # 自动语音识别数据集
+    BurstGPTDataset,               # BurstGPT数据集
+    ConversationDataset,           # 对话数据集
+    HuggingFaceDataset,            # HuggingFace数据集基类
+    InstructCoderDataset,          # 代码指令数据集
+    MTBenchDataset,                # MT-Bench多轮对话数据集
+    NextEditPredictionDataset,     # 下一步编辑预测数据集
+    RandomDataset,                 # 随机生成数据集
+    SampleRequest,                 # 样本请求数据结构
+    ShareGPTDataset,               # ShareGPT对话数据集
+    SonnetDataset,                 # 诗歌数据集
+    VisionArenaDataset,            # 视觉竞技场数据集
 )
+
+# 导入工具函数
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
 
+# 毫秒到秒的转换常数
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
 
 
 @dataclass
 class BenchmarkMetrics:
-    completed: int
-    total_input: int
-    total_output: int
-    request_throughput: float
-    request_goodput: float
-    output_throughput: float
-    total_token_throughput: float
-    mean_ttft_ms: float
-    median_ttft_ms: float
-    std_ttft_ms: float
-    percentiles_ttft_ms: list[tuple[float, float]]
-    mean_tpot_ms: float
-    median_tpot_ms: float
-    std_tpot_ms: float
-    percentiles_tpot_ms: list[tuple[float, float]]
-    mean_itl_ms: float
-    median_itl_ms: float
-    std_itl_ms: float
-    percentiles_itl_ms: list[tuple[float, float]]
-    # E2EL stands for end-to-end latency per request.
-    # It is the time taken on the client side from sending
-    # a request to receiving a complete response.
-    mean_e2el_ms: float
-    median_e2el_ms: float
-    std_e2el_ms: float
-    percentiles_e2el_ms: list[tuple[float, float]]
+    """
+    压测性能指标数据类
+    
+    包含了vLLM推理服务的各项关键性能指标，用于全面评估服务性能
+    """
+    # 基础统计指标
+    completed: int                                    # 成功完成的请求数量
+    total_input: int                                  # 总输入token数量
+    total_output: int                                 # 总输出token数量
+    
+    # 吞吐量指标
+    request_throughput: float                         # 请求吞吐量 (请求/秒)
+    request_goodput: float                            # 请求良好吞吐量 (满足SLA的请求/秒)
+    output_throughput: float                          # 输出token吞吐量 (token/秒)
+    total_token_throughput: float                     # 总token吞吐量 (输入+输出token/秒)
+    
+    # TTFT (Time to First Token) - 首token时间指标
+    mean_ttft_ms: float                               # TTFT平均值 (毫秒)
+    median_ttft_ms: float                             # TTFT中位数 (毫秒)
+    std_ttft_ms: float                                # TTFT标准差 (毫秒)
+    percentiles_ttft_ms: list[tuple[float, float]]    # TTFT百分位数列表 [(百分位, 值)]
+    
+    # TPOT (Time per Output Token) - 每输出token时间指标
+    mean_tpot_ms: float                               # TPOT平均值 (毫秒)
+    median_tpot_ms: float                             # TPOT中位数 (毫秒)
+    std_tpot_ms: float                                # TPOT标准差 (毫秒)
+    percentiles_tpot_ms: list[tuple[float, float]]    # TPOT百分位数列表
+    
+    # ITL (Inter-token Latency) - token间延迟指标
+    mean_itl_ms: float                                # ITL平均值 (毫秒)
+    median_itl_ms: float                              # ITL中位数 (毫秒)
+    std_itl_ms: float                                 # ITL标准差 (毫秒)
+    percentiles_itl_ms: list[tuple[float, float]]     # ITL百分位数列表
+    
+    # E2EL (End-to-End Latency) - 端到端延迟指标
+    # 表示从客户端发送请求到接收完整响应的总时间
+    mean_e2el_ms: float                               # E2EL平均值 (毫秒)
+    median_e2el_ms: float                             # E2EL中位数 (毫秒)
+    std_e2el_ms: float                                # E2EL标准差 (毫秒)
+    percentiles_e2el_ms: list[tuple[float, float]]    # E2EL百分位数列表
 
 
 async def get_request(
@@ -111,42 +144,49 @@ async def get_request(
     burstiness: float = 1.0,
 ) -> AsyncGenerator[SampleRequest, None]:
     """
-    Asynchronously generates requests at a specified rate
-    with OPTIONAL burstiness.
-
-    Args:
-        input_requests:
-            A list of input requests, each represented as a SampleRequest.
-        request_rate:
-            The rate at which requests are generated (requests/s).
-        burstiness (optional):
-            The burstiness factor of the request generation.
-            Only takes effect when request_rate is not inf.
-            Default value is 1, which follows a Poisson process.
-            Otherwise, the request intervals follow a gamma distribution.
-            A lower burstiness value (0 < burstiness < 1) results
-            in more bursty requests, while a higher burstiness value
-            (burstiness > 1) results in a more uniform arrival of requests.
+    异步生成指定速率的请求流，支持可选的突发性控制
+    
+    这个函数是压测的核心调度器，控制请求的发送时机和频率。
+    通过调整请求速率和突发性参数，可以模拟不同的负载模式。
+    
+    参数:
+        input_requests: 输入请求列表，每个元素都是SampleRequest对象
+        request_rate: 请求生成速率 (请求/秒)
+                     - 设为float("inf")表示无限制，尽快发送所有请求
+                     - 设为具体数值表示按该速率发送请求
+        burstiness: 请求突发性因子 (可选，默认1.0)
+                   - 仅在request_rate不为无穷大时生效
+                   - 默认值1.0遵循泊松过程（指数分布间隔）
+                   - 其他值遵循伽马分布间隔
+                   - 较低值(0 < burstiness < 1)产生更突发的请求模式
+                   - 较高值(burstiness > 1)产生更均匀的请求到达模式
+    
+    返回:
+        AsyncGenerator[SampleRequest, None]: 异步生成器，按指定速率产生请求
     """
+    # 将请求列表转换为迭代器
     input_requests: Iterable[SampleRequest] = iter(input_requests)
 
-    # Calculate scale parameter theta to maintain the desired request_rate.
+    # 计算伽马分布的尺度参数theta，以维持期望的请求速率
     assert burstiness > 0, (
-        f"A positive burstiness factor is expected, but given {burstiness}."
+        f"突发性因子必须为正数，但得到了 {burstiness}。"
     )
     theta = 1.0 / (request_rate * burstiness)
 
+    # 遍历所有输入请求
     for request in input_requests:
+        # 立即产生当前请求
         yield request
 
+        # 如果请求速率为无穷大，则不需要等待，立即处理下一个请求
         if request_rate == float("inf"):
-            # If the request rate is infinity, then we don't need to wait.
             continue
 
-        # Sample the request interval from the gamma distribution.
-        # If burstiness is 1, it follows exponential distribution.
+        # 从伽马分布中采样请求间隔时间
+        # 当burstiness=1时，这等价于指数分布（泊松过程）
         interval = np.random.gamma(shape=burstiness, scale=theta)
-        # The next request will be sent after the interval.
+        
+        # 等待计算出的间隔时间后再发送下一个请求
         await asyncio.sleep(interval)
 
 
