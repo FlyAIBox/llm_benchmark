@@ -898,8 +898,71 @@ def main(args: argparse.Namespace):
 
 
 if __name__ == "__main__":
+    '''
+    1. 主要描述
+    description: "Benchmark the online serving throughput. / 在线推理服务吞吐量压测工具"
+    2. 基础参数
+    --backend: 后端选择
+    --base-url: 服务器或API基础URL
+    --host: 服务器主机地址
+    --port: 服务器端口号
+    --endpoint: API端点
+    --model: 模型名称
+    --tokenizer: 分词器名称或路径
+    --use-beam-search: 使用束搜索进行生成
+    --num-prompts: 要处理的提示数量
+    --seed: 用于可重现性的随机种子
+    3. 性能相关参数
+    --logprobs: 对数概率计算
+    --request-rate: 每秒请求数
+    --burstiness: 请求生成的突发性因子
+    --max-concurrency: 最大并发请求数
+    --trust-remote-code: 信任来自huggingface的远程代码
+    --disable-tqdm: 禁用tqdm进度条
+    --profile: 使用Torch Profiler
+    4. 结果保存参数
+    --save-result: 保存压测结果到json文件
+    --save-detailed: 保存详细结果信息
+    --append-result: 追加结果到现有文件
+    --metadata: 元数据键值对
+    --result-dir: 结果保存目录
+    --result-filename: 结果文件名
+    5. 性能指标参数
+    --ignore-eos: 忽略EOS标志
+    --percentile-metrics: 报告百分位数的指标
+    --metric-percentiles: 指标的百分位数
+    --goodput: 良好吞吐量的服务级别目标
+    6. 数据集相关参数
+    --dataset-name: 数据集名称
+    --dataset-path: 数据集路径
+    Sonnet数据集选项
+    --sonnet-input-len: 输入token数量
+    --sonnet-output-len: 输出token数量
+    --sonnet-prefix-len: 前缀token数量
+    ShareGPT数据集选项
+    --sharegpt-output-len: 输出长度
+    随机数据集选项
+    --random-input-len: 输入token数量
+    --random-output-len: 输出token数量
+    --random-range-ratio: 范围比率
+    --random-prefix-len: 前缀token数量
+    HF数据集选项
+    --hf-subset: HF数据集子集
+    --hf-split: HF数据集分割
+    --hf-output-len: 输出长度
+    7. 采样参数
+    --top-p: Top-p采样参数
+    --top-k: Top-k采样参数
+    --min-p: Min-p采样参数
+    --temperature: 温度采样参数
+    8. 其他参数
+    --tokenizer-mode: 分词器模式
+    --served-model-name: API中的模型名称
+    --lora-modules: LoRA模块名称子集
+    所有参数现在都提供了清晰的中英文双语说明，方便中文用户理解和使用这个vLLM在线推理服务压测工具。
+    '''
     parser = FlexibleArgumentParser(
-        description="Benchmark the online serving throughput."
+        description="Benchmark the online serving throughput. / 在线推理服务吞吐量压测工具"
     )
     parser.add_argument(
         "--backend",
@@ -911,30 +974,41 @@ if __name__ == "__main__":
         "--base-url",
         type=str,
         default=None,
-        help="Server or API base url if not using http host and port.",
+        help="Server or API base url if not using http host and port. / 服务器或API基础URL（当不使用http主机和端口时）",
     )
     # Use 127.0.0.1 here instead of localhost to force the use of ipv4
-    parser.add_argument("--host", type=str, default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument(
+        "--host", 
+        type=str, 
+        default="127.0.0.1",
+        help="Server host address. / 服务器主机地址"
+    )
+    parser.add_argument(
+        "--port", 
+        type=int, 
+        default=8000,
+        help="Server port number. / 服务器端口号"
+    )
     parser.add_argument(
         "--endpoint",
         type=str,
         default="/v1/completions",
-        help="API endpoint.",
+        help="API endpoint. / API端点",
     )
     parser.add_argument(
         "--dataset-name",
         type=str,
         default="sharegpt",
         choices=["sharegpt", "burstgpt", "sonnet", "random", "hf"],
-        help="Name of the dataset to benchmark on.",
+        help="Name of the dataset to benchmark on. / 用于压测的数据集名称",
     )
     parser.add_argument(
         "--dataset-path",
         type=str,
         default=None,
         help="Path to the sharegpt/sonnet dataset. "
-        "Or the huggingface dataset ID if using HF dataset.",
+        "Or the huggingface dataset ID if using HF dataset. / "
+        "sharegpt/sonnet数据集的路径，或使用HF数据集时的huggingface数据集ID",
     )
     parser.add_argument(
         "--max-concurrency",
@@ -947,26 +1021,33 @@ if __name__ == "__main__":
         "initiated, this argument will control how many are actually allowed "
         "to execute at a time. This means that when used in combination, the "
         "actual request rate may be lower than specified with --request-rate, "
-        "if the server is not processing requests fast enough to keep up.",
+        "if the server is not processing requests fast enough to keep up. / "
+        "最大并发请求数。可用于模拟高级组件强制执行最大并发请求数的环境。"
+        "虽然--request-rate参数控制请求的发起速率，但此参数将控制实际允许同时执行的请求数。"
+        "这意味着当结合使用时，如果服务器处理请求的速度不够快，实际请求速率可能低于--request-rate指定的速率。",
     )
 
     parser.add_argument(
         "--model",
         type=str,
         required=True,
-        help="Name of the model.",
+        help="Name of the model. / 模型名称",
     )
     parser.add_argument(
         "--tokenizer",
         type=str,
-        help="Name or path of the tokenizer, if not using the default tokenizer.",  # noqa: E501
+        help="Name or path of the tokenizer, if not using the default tokenizer. / 分词器的名称或路径（如果不使用默认分词器）",  # noqa: E501
     )
-    parser.add_argument("--use-beam-search", action="store_true")
+    parser.add_argument(
+        "--use-beam-search", 
+        action="store_true",
+        help="Use beam search for generation. / 使用束搜索进行生成"
+    )
     parser.add_argument(
         "--num-prompts",
         type=int,
         default=1000,
-        help="Number of prompts to process.",
+        help="Number of prompts to process. / 要处理的提示数量",
     )
     parser.add_argument(
         "--logprobs",
@@ -977,7 +1058,10 @@ if __name__ == "__main__":
             "the request. If unspecified, then either (1) if beam search "
             "is disabled, no logprobs are computed & a single dummy "
             "logprob is returned for each token; or (2) if beam search "
-            "is enabled 1 logprob per token is computed"
+            "is enabled 1 logprob per token is computed / "
+            "作为请求一部分计算和返回的每个token的对数概率数量。如果未指定，则："
+            "(1) 如果禁用束搜索，不计算对数概率，每个token返回单个虚拟对数概率；"
+            "或 (2) 如果启用束搜索，每个token计算1个对数概率"
         ),
     )
     parser.add_argument(
@@ -987,7 +1071,9 @@ if __name__ == "__main__":
         help="Number of requests per second. If this is inf, "
         "then all the requests are sent at time 0. "
         "Otherwise, we use Poisson process or gamma distribution "
-        "to synthesize the request arrival times.",
+        "to synthesize the request arrival times. / "
+        "每秒请求数。如果为inf，则所有请求在时间0发送。"
+        "否则，我们使用泊松过程或伽马分布来合成请求到达时间。",
     )
     parser.add_argument(
         "--burstiness",
@@ -999,40 +1085,51 @@ if __name__ == "__main__":
         "Otherwise, the request intervals follow a gamma distribution. "
         "A lower burstiness value (0 < burstiness < 1) results in more "
         "bursty requests. A higher burstiness value (burstiness > 1) "
-        "results in a more uniform arrival of requests.",
+        "results in a more uniform arrival of requests. / "
+        "请求生成的突发性因子。仅在request_rate不为inf时生效。"
+        "默认值为1，遵循泊松过程。否则，请求间隔遵循伽马分布。"
+        "较低的突发性值(0 < burstiness < 1)产生更突发的请求。"
+        "较高的突发性值(burstiness > 1)产生更均匀的请求到达。",
     )
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--seed", 
+        type=int, 
+        default=0,
+        help="Random seed for reproducibility. / 用于可重现性的随机种子"
+    )
     parser.add_argument(
         "--trust-remote-code",
         action="store_true",
-        help="Trust remote code from huggingface",
+        help="Trust remote code from huggingface / 信任来自huggingface的远程代码",
     )
     parser.add_argument(
         "--disable-tqdm",
         action="store_true",
-        help="Specify to disable tqdm progress bar.",
+        help="Specify to disable tqdm progress bar. / 指定禁用tqdm进度条",
     )
     parser.add_argument(
         "--profile",
         action="store_true",
         help="Use Torch Profiler. The endpoint must be launched with "
-        "VLLM_TORCH_PROFILER_DIR to enable profiler.",
+        "VLLM_TORCH_PROFILER_DIR to enable profiler. / "
+        "使用Torch Profiler。端点必须使用VLLM_TORCH_PROFILER_DIR启动才能启用分析器。",
     )
     parser.add_argument(
         "--save-result",
         action="store_true",
-        help="Specify to save benchmark results to a json file",
+        help="Specify to save benchmark results to a json file / 指定将压测结果保存到json文件",
     )
     parser.add_argument(
         "--save-detailed",
         action="store_true",
         help="When saving the results, whether to include per request "
-        "information such as response, error, ttfs, tpots, etc.",
+        "information such as response, error, ttfs, tpots, etc. / "
+        "保存结果时，是否包含每个请求的信息，如响应、错误、ttfs、tpots等",
     )
     parser.add_argument(
         "--append-result",
         action="store_true",
-        help="Append the benchmark result to the existing json file.",
+        help="Append the benchmark result to the existing json file. / 将压测结果追加到现有的json文件",
     )
     parser.add_argument(
         "--metadata",
@@ -1040,14 +1137,16 @@ if __name__ == "__main__":
         nargs="*",
         help="Key-value pairs (e.g, --metadata version=0.3.3 tp=1) "
         "for metadata of this run to be saved in the result JSON file "
-        "for record keeping purposes.",
+        "for record keeping purposes. / "
+        "键值对（例如，--metadata version=0.3.3 tp=1），用于保存此次运行的元数据到结果JSON文件中以供记录保存。",
     )
     parser.add_argument(
         "--result-dir",
         type=str,
         default=None,
         help="Specify directory to save benchmark json results."
-        "If not specified, results are saved in the current directory.",
+        "If not specified, results are saved in the current directory. / "
+        "指定保存压测json结果的目录。如果未指定，结果保存在当前目录。",
     )
     parser.add_argument(
         "--result-filename",
@@ -1056,13 +1155,16 @@ if __name__ == "__main__":
         help="Specify the filename to save benchmark json results."
         "If not specified, results will be saved in "
         "{backend}-{args.request_rate}qps-{base_model_id}-{current_dt}.json"
-        " format.",
+        " format. / "
+        "指定保存压测json结果的文件名。如果未指定，结果将以"
+        "{backend}-{args.request_rate}qps-{base_model_id}-{current_dt}.json格式保存。",
     )
     parser.add_argument(
         "--ignore-eos",
         action="store_true",
         help="Set ignore_eos flag when sending the benchmark request."
-        "Warning: ignore_eos is not supported in deepspeed_mii and tgi.",
+        "Warning: ignore_eos is not supported in deepspeed_mii and tgi. / "
+        "发送压测请求时设置ignore_eos标志。警告：deepspeed_mii和tgi不支持ignore_eos。",
     )
     parser.add_argument(
         "--percentile-metrics",
@@ -1071,7 +1173,9 @@ if __name__ == "__main__":
         help="Comma-separated list of selected metrics to report percentils. "
         "This argument specifies the metrics to report percentiles. "
         'Allowed metric names are "ttft", "tpot", "itl", "e2el". '
-        'Default value is "ttft,tpot,itl".',
+        'Default value is "ttft,tpot,itl". / '
+        '报告百分位数的选定指标的逗号分隔列表。此参数指定要报告百分位数的指标。'
+        '允许的指标名称有"ttft"、"tpot"、"itl"、"e2el"。默认值为"ttft,tpot,itl"。',
     )
     parser.add_argument(
         "--metric-percentiles",
@@ -1080,7 +1184,9 @@ if __name__ == "__main__":
         help="Comma-separated list of percentiles for selected metrics. "
         'To report 25-th, 50-th, and 75-th percentiles, use "25,50,75". '
         'Default value is "99". '
-        'Use "--percentile-metrics" to select metrics.',
+        'Use "--percentile-metrics" to select metrics. / '
+        '选定指标的百分位数逗号分隔列表。要报告第25、50和75百分位数，使用"25,50,75"。'
+        '默认值为"99"。使用"--percentile-metrics"选择指标。',
     )
     parser.add_argument(
         "--goodput",
@@ -1092,51 +1198,55 @@ if __name__ == "__main__":
         "separated by spaces. Allowed request level metric names are "
         '"ttft", "tpot", "e2el". For more context on the definition of '
         "goodput, refer to DistServe paper: https://arxiv.org/pdf/2401.09670 "
-        "and the blog: https://hao-ai-lab.github.io/blogs/distserve",
+        "and the blog: https://hao-ai-lab.github.io/blogs/distserve / "
+        '将良好吞吐量的服务级别目标指定为"KEY:VALUE"对，其中键是指标名称，值以毫秒为单位。'
+        '可以提供多个"KEY:VALUE"对，用空格分隔。允许的请求级别指标名称有"ttft"、"tpot"、"e2el"。'
+        '有关良好吞吐量定义的更多上下文，请参阅DistServe论文：https://arxiv.org/pdf/2401.09670 '
+        '和博客：https://hao-ai-lab.github.io/blogs/distserve',
     )
 
     # group for dataset specific arguments
-    sonnet_group = parser.add_argument_group("sonnet dataset options")
+    sonnet_group = parser.add_argument_group("sonnet dataset options / sonnet数据集选项")
     sonnet_group.add_argument(
         "--sonnet-input-len",
         type=int,
         default=550,
-        help="Number of input tokens per request, used only for sonnet dataset.",
+        help="Number of input tokens per request, used only for sonnet dataset. / 每个请求的输入token数量，仅用于sonnet数据集",
     )
     sonnet_group.add_argument(
         "--sonnet-output-len",
         type=int,
         default=150,
-        help="Number of output tokens per request, used only for sonnet dataset.",
+        help="Number of output tokens per request, used only for sonnet dataset. / 每个请求的输出token数量，仅用于sonnet数据集",
     )
     sonnet_group.add_argument(
         "--sonnet-prefix-len",
         type=int,
         default=200,
-        help="Number of prefix tokens per request, used only for sonnet dataset.",
+        help="Number of prefix tokens per request, used only for sonnet dataset. / 每个请求的前缀token数量，仅用于sonnet数据集",
     )
 
-    sharegpt_group = parser.add_argument_group("sharegpt dataset options")
+    sharegpt_group = parser.add_argument_group("sharegpt dataset options / sharegpt数据集选项")
     sharegpt_group.add_argument(
         "--sharegpt-output-len",
         type=int,
         default=None,
         help="Output length for each request. Overrides the output length "
-        "from the ShareGPT dataset.",
+        "from the ShareGPT dataset. / 每个请求的输出长度。覆盖ShareGPT数据集中的输出长度",
     )
 
-    random_group = parser.add_argument_group("random dataset options")
+    random_group = parser.add_argument_group("random dataset options / 随机数据集选项")
     random_group.add_argument(
         "--random-input-len",
         type=int,
         default=1024,
-        help="Number of input tokens per request, used only for random sampling.",
+        help="Number of input tokens per request, used only for random sampling. / 每个请求的输入token数量，仅用于随机采样",
     )
     random_group.add_argument(
         "--random-output-len",
         type=int,
         default=128,
-        help="Number of output tokens per request, used only for random sampling.",
+        help="Number of output tokens per request, used only for random sampling. / 每个请求的输出token数量，仅用于随机采样",
     )
     random_group.add_argument(
         "--random-range-ratio",
@@ -1145,7 +1255,9 @@ if __name__ == "__main__":
         help="Range ratio for sampling input/output length, "
         "used only for random sampling. Must be in the range [0, 1) to define "
         "a symmetric sampling range"
-        "[length * (1 - range_ratio), length * (1 + range_ratio)].",
+        "[length * (1 - range_ratio), length * (1 + range_ratio)]. / "
+        "采样输入/输出长度的范围比率，仅用于随机采样。必须在[0, 1)范围内以定义对称采样范围"
+        "[length * (1 - range_ratio), length * (1 + range_ratio)]。",
     )
     random_group.add_argument(
         "--random-prefix-len",
@@ -1157,43 +1269,46 @@ if __name__ == "__main__":
             "The total input length is the sum of `random-prefix-len` and "
             "a random "
             "context length sampled from [input_len * (1 - range_ratio), "
-            "input_len * (1 + range_ratio)]."
+            "input_len * (1 + range_ratio)]. / "
+            "请求中随机上下文之前的固定前缀token数量。"
+            "总输入长度是`random-prefix-len`和从[input_len * (1 - range_ratio), "
+            "input_len * (1 + range_ratio)]采样的随机上下文长度的总和。"
         ),
     )
 
-    hf_group = parser.add_argument_group("hf dataset options")
+    hf_group = parser.add_argument_group("hf dataset options / hf数据集选项")
     hf_group.add_argument(
-        "--hf-subset", type=str, default=None, help="Subset of the HF dataset."
+        "--hf-subset", type=str, default=None, help="Subset of the HF dataset. / HF数据集的子集"
     )
     hf_group.add_argument(
-        "--hf-split", type=str, default=None, help="Split of the HF dataset."
+        "--hf-split", type=str, default=None, help="Split of the HF dataset. / HF数据集的分割"
     )
     hf_group.add_argument(
         "--hf-output-len",
         type=int,
         default=None,
         help="Output length for each request. Overrides the output lengths "
-        "from the sampled HF dataset.",
+        "from the sampled HF dataset. / 每个请求的输出长度。覆盖采样的HF数据集中的输出长度",
     )
 
-    sampling_group = parser.add_argument_group("sampling parameters")
+    sampling_group = parser.add_argument_group("sampling parameters / 采样参数")
     sampling_group.add_argument(
         "--top-p",
         type=float,
         default=None,
-        help="Top-p sampling parameter. Only has effect on openai-compatible backends.",
+        help="Top-p sampling parameter. Only has effect on openai-compatible backends. / Top-p采样参数。仅在openai兼容后端上有效",
     )
     sampling_group.add_argument(
         "--top-k",
         type=int,
         default=None,
-        help="Top-k sampling parameter. Only has effect on openai-compatible backends.",
+        help="Top-k sampling parameter. Only has effect on openai-compatible backends. / Top-k采样参数。仅在openai兼容后端上有效",
     )
     sampling_group.add_argument(
         "--min-p",
         type=float,
         default=None,
-        help="Min-p sampling parameter. Only has effect on openai-compatible backends.",
+        help="Min-p sampling parameter. Only has effect on openai-compatible backends. / Min-p采样参数。仅在openai兼容后端上有效",
     )
     sampling_group.add_argument(
         "--temperature",
@@ -1201,7 +1316,8 @@ if __name__ == "__main__":
         default=None,
         help="Temperature sampling parameter. Only has effect on "
         "openai-compatible backends. If not specified, default to greedy "
-        "decoding (i.e. temperature==0.0).",
+        "decoding (i.e. temperature==0.0). / "
+        "温度采样参数。仅在openai兼容后端上有效。如果未指定，默认为贪婪解码（即temperature==0.0）。",
     )
 
     parser.add_argument(
@@ -1213,7 +1329,9 @@ if __name__ == "__main__":
         'fast tokenizer if available.\n* "slow" will '
         "always use the slow tokenizer. \n* "
         '"mistral" will always use the `mistral_common` tokenizer. \n*'
-        '"custom" will use --tokenizer to select the preregistered tokenizer.',
+        '"custom" will use --tokenizer to select the preregistered tokenizer. / '
+        '分词器模式。\n\n* "auto"将使用快速分词器（如果可用）\n* "slow"将始终使用慢速分词器\n* '
+        '"mistral"将始终使用`mistral_common`分词器\n* "custom"将使用--tokenizer选择预注册的分词器',
     )
 
     parser.add_argument(
@@ -1222,7 +1340,8 @@ if __name__ == "__main__":
         default=None,
         help="The model name used in the API. "
         "If not specified, the model name will be the "
-        "same as the ``--model`` argument. ",
+        "same as the ``--model`` argument. / "
+        "API中使用的模型名称。如果未指定，模型名称将与``--model``参数相同。",
     )
 
     parser.add_argument(
@@ -1231,7 +1350,8 @@ if __name__ == "__main__":
         default=None,
         help="A subset of LoRA module names passed in when "
         "launching the server. For each request, the "
-        "script chooses a LoRA module at random.",
+        "script chooses a LoRA module at random. / "
+        "启动服务器时传入的LoRA模块名称子集。对于每个请求，脚本随机选择一个LoRA模块。",
     )
 
     args = parser.parse_args()
