@@ -121,7 +121,16 @@ python3 benchmark_serving.py \
 python3 aggregate_result.py
 ```
 
-这将生成一个汇总文件`results/aggregate_results.csv`，包含所有测试用例的性能指标。
+这将生成一个汇总文件`results/aggregate_results_{日期}.csv`，包含所有测试用例的性能指标。
+
+### 双语输出格式
+
+生成的CSV文件采用双语格式：
+- **第1行**：英文列名
+- **第2行**：中文列名  
+- **第3行开始**：实际数据
+
+这种格式便于中英文用户理解和使用，同时保持了数据的标准化。
 
 ### 输出指标说明
 
@@ -156,7 +165,7 @@ vllm_benchmark_serving/
 └── results/                     # 压测结果目录
     ├── bench_io256x256_mc1_np10.json
     ├── bench_io256x256_mc4_np40.json
-    └── aggregate_results.csv
+    └── aggregate_results_20250727.csv
 ```
 
 ---
