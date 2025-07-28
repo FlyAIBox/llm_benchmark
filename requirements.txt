@@ -21,7 +21,9 @@
 # -----------------------------------------------------------------------------
 # vLLM推理引擎 - 用于分词器和工具函数
 # 注意：这里使用的是海光DCU K100-AI(DTK25.04)优化版本
-vllm==0.6.2+das.opt3.dtk2504
+# vllm==0.6.2+das.opt3.dtk2504
+https://download.sourcefind.cn:65024/file/4/vllm/DAS1.5/vllm-0.6.2+das.opt3.dtk2504-cp310-cp310-manylinux_2_28_x86_64.whl
+
 
 # HuggingFace变换器库 - 提供分词器和模型工具
 transformers==4.45.0
@@ -48,7 +50,7 @@ seaborn==0.11.0
 plotly==5.0.0
 
 # 其他工具依赖
-pyyaml==pyyaml  # YAML配置文件解析
+pyyaml==6.0.2  # YAML配置文件解析
 requests==2.32.3 # HTTP请求库（备用）
 pillow==11.3.0  # 图像处理库（用于多模态数据集）
 huggingface-hub==0.34.1  # HuggingFace Hub客户端

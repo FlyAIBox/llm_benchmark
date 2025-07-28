@@ -105,7 +105,7 @@ def save_bilingual_csv(df, output_path):
         df.to_csv(f, index=False, header=False)
 
 
-def run_benchmark(common_args, input_len, output_len, concurrency, num_prompts):
+def run_benchmark(common_args, input_len, output_len, concurrency, num_prompts, result_subdir):
     """
     执行单个参数组合的压测
 
@@ -115,6 +115,7 @@ def run_benchmark(common_args, input_len, output_len, concurrency, num_prompts):
         output_len (int): 输出token长度
         concurrency (int): 最大并发请求数
         num_prompts (int): 总请求数量
+        result_subdir (str): 结果保存的子目录路径
     """
     # 复制公共参数，避免修改原始列表
     args = common_args.copy()
@@ -127,11 +128,11 @@ def run_benchmark(common_args, input_len, output_len, concurrency, num_prompts):
     args += ["--num-prompts", str(num_prompts)]
 
     # 创建结果保存目录
-    os.makedirs(RESULT_DIR, exist_ok=True)
+    os.makedirs(result_subdir, exist_ok=True)
 
     # 生成结果文件名，格式: bench_io{输入长度}x{输出长度}_mc{并发数}_np{请求数}.json
     outfile = os.path.join(
-        RESULT_DIR,
+        result_subdir,
         f"bench_io{input_len}x{output_len}_mc{concurrency}_np{num_prompts}.json"
     )
     args += ["--save-result", "--result-filename", outfile]
@@ -149,6 +150,28 @@ def run_benchmark(common_args, input_len, output_len, concurrency, num_prompts):
         print(f"参数组合 io=({input_len},{output_len}), mc={concurrency}, np={num_prompts} 执行完成，结果已保存: {outfile}")
 
 
+def get_model_short_name(model_path):
+    """
+    从模型路径中提取简短的模型名称
+    
+    参数:
+        model_path (str): 模型路径或名称
+        
+    返回:
+        str: 简化的模型名称
+    """
+    # 如果是路径，取最后一部分
+    model_name = os.path.basename(model_path)
+    
+    # 移除常见的前缀和后缀
+    model_name = model_name.replace("cognitivecomputations/", "")
+    model_name = model_name.replace("-awq", "")
+    model_name = model_name.replace("-gptq", "")
+    model_name = model_name.replace("-gguf", "")
+    
+    return model_name
+
+
 def batch_benchmark(config_file=DEFAULT_CONFIG_FILE):
     """
     批量执行压测实验
@@ -159,7 +182,8 @@ def batch_benchmark(config_file=DEFAULT_CONFIG_FILE):
     处理流程:
     1. 从YAML配置文件加载参数设置
     2. 构建公共的命令行参数
-    3. 遍历所有参数组合执行压测
+    3. 创建按模型名称和时间组织的结果目录
+    4. 遍历所有参数组合执行压测
     """
     # 从YAML配置文件加载设置和参数列表
     with open(config_file, "r") as f:
@@ -171,6 +195,13 @@ def batch_benchmark(config_file=DEFAULT_CONFIG_FILE):
     tokenizer = cfg["tokenizer"]                      # 分词器路径
     io_pairs = cfg.get("input_output", [])            # 输入输出长度组合列表
     cp_pairs = cfg.get("concurrency_prompts", [])     # 并发数和请求数组合列表
+
+    # 创建按模型名称和测试时间组织的结果目录
+    model_short_name = get_model_short_name(model)
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    result_subdir = os.path.join(RESULT_DIR, f"{model_short_name}_{current_time}")
+    
+    print(f"测试结果将保存到: {result_subdir}")
 
     # 构建所有压测共用的命令行参数
     common_args = [
@@ -187,7 +218,9 @@ def batch_benchmark(config_file=DEFAULT_CONFIG_FILE):
     # 对每个输入输出长度组合，测试所有的并发数和请求数组合
     for input_len, output_len in io_pairs:
         for concurrency, num_prompts in cp_pairs:
-            run_benchmark(common_args, input_len, output_len, concurrency, num_prompts)
+            run_benchmark(common_args, input_len, output_len, concurrency, num_prompts, result_subdir)
+    
+    return result_subdir
 
 
 def single_benchmark(model, base_url, num_prompts=100, max_concurrency=10,
@@ -222,15 +255,17 @@ def single_benchmark(model, base_url, num_prompts=100, max_concurrency=10,
     if tokenizer:
         cmd.extend(['--tokenizer', tokenizer])
 
-    # 创建结果保存目录
-    os.makedirs(RESULT_DIR, exist_ok=True)
+    # 创建按模型名称和测试时间组织的结果目录
+    model_short_name = get_model_short_name(model)
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    result_subdir = os.path.join(RESULT_DIR, f"{model_short_name}_{current_time}")
+    os.makedirs(result_subdir, exist_ok=True)
 
     # 生成结果文件名
-    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    outfile = os.path.join(RESULT_DIR, f"single_bench_{current_time}.json")
+    outfile = os.path.join(result_subdir, f"single_bench_{current_time}.json")
     cmd.extend(['--save-result', '--result-filename', outfile])
 
-    # 打印即将执行的命令
+    print(f"测试结果将保存到: {result_subdir}")
     print(f"正在执行单次压测: {' '.join(cmd)}")
 
     # 执行压测命令
@@ -241,49 +276,119 @@ def single_benchmark(model, base_url, num_prompts=100, max_concurrency=10,
         print(f"单次压测执行失败，返回码: {ret.returncode}")
     else:
         print(f"单次压测执行完成，结果已保存: {outfile}")
+    
+    return result_subdir
 
 
-def aggregate_results():
+def get_available_result_dirs():
     """
-    聚合所有压测结果
+    获取results目录下所有可用的结果子目录
+    
+    返回:
+        list: 按时间排序的结果目录列表（最新的在前）
+    """
+    if not os.path.exists(RESULT_DIR):
+        return []
+    
+    subdirs = []
+    for item in os.listdir(RESULT_DIR):
+        item_path = os.path.join(RESULT_DIR, item)
+        if os.path.isdir(item_path):
+            # 检查目录中是否有JSON文件
+            json_files = glob.glob(os.path.join(item_path, "*.json"))
+            if json_files:
+                subdirs.append(item)
+    
+    # 按目录名排序（包含时间戳，所以可以按字典序排序）
+    subdirs.sort(reverse=True)
+    return subdirs
+
+
+def aggregate_results(target_dir=None):
+    """
+    聚合指定目录下的压测结果
+
+    参数:
+        target_dir (str): 要聚合的结果目录，如果为None则使用最新的结果目录
 
     处理流程:
-    1. 扫描results目录下的所有JSON文件
-    2. 读取每个JSON文件的内容
-    3. 从文件名解析输入输出长度信息
-    4. 将所有数据合并到pandas DataFrame
-    5. 导出为双语CSV文件（英文+中文列名）
+    1. 确定要聚合的目录
+    2. 扫描目录下的所有JSON文件
+    3. 读取每个JSON文件的内容
+    4. 从文件名解析输入输出长度信息
+    5. 将所有数据合并到pandas DataFrame
+    6. 导出为双语CSV文件（英文+中文列名）
     """
-    # 1) 获取results目录下所有JSON文件的路径列表
-    json_paths = glob.glob(os.path.join(RESULT_DIR, "*.json"))
+    # 1) 确定要聚合的目录
+    if target_dir is None:
+        # 获取可用的结果目录
+        available_dirs = get_available_result_dirs()
+        if not available_dirs:
+            # 检查根目录下是否有JSON文件（兼容旧版本）
+            json_paths = glob.glob(os.path.join(RESULT_DIR, "*.json"))
+            if json_paths:
+                target_path = RESULT_DIR
+                print(f"在根目录找到 {len(json_paths)} 个JSON文件，将进行聚合")
+            else:
+                print("在results/目录中未找到任何JSON文件或结果子目录。")
+                return
+        else:
+            # 使用最新的结果目录
+            target_dir = available_dirs[0]
+            target_path = os.path.join(RESULT_DIR, target_dir)
+            print(f"使用最新的结果目录: {target_dir}")
+            print(f"可用的结果目录: {', '.join(available_dirs)}")
+    else:
+        target_path = os.path.join(RESULT_DIR, target_dir)
+        if not os.path.exists(target_path):
+            print(f"指定的目录不存在: {target_path}")
+            return
+
+    # 2) 获取目标目录下所有JSON文件的路径列表
+    json_paths = glob.glob(os.path.join(target_path, "*.json"))
     if not json_paths:
-        print("在results/目录中未找到JSON文件。")
+        print(f"在目录 {target_path} 中未找到JSON文件。")
         return
 
-    # 2) 遍历每个JSON文件，读取数据并添加元信息
+    print(f"找到 {len(json_paths)} 个JSON文件进行聚合")
+
+    # 3) 遍历每个JSON文件，读取数据并添加元信息
     records = []
     for p in json_paths:
-        # 读取JSON文件内容
-        with open(p, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            # 读取JSON文件内容
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-        # 获取文件名并解析输入输出长度
-        filename = os.path.basename(p)
-        input_len, output_len = parse_input_output_lengths(filename)
+            # 获取文件名并解析输入输出长度
+            filename = os.path.basename(p)
+            input_len, output_len = parse_input_output_lengths(filename)
 
-        # 向数据中添加额外的元信息
-        data["input_len"] = input_len      # 输入token长度
-        data["output_len"] = output_len    # 输出token长度
-        data["filename"] = filename        # 原始文件名
+            # 向数据中添加额外的元信息
+            data["input_len"] = input_len      # 输入token长度
+            data["output_len"] = output_len    # 输出token长度
+            data["filename"] = filename        # 原始文件名
+            data["result_dir"] = target_dir or "root"  # 结果目录名
 
-        records.append(data)
+            records.append(data)
+        except Exception as e:
+            print(f"读取文件 {p} 时出错: {e}")
+            continue
 
-    # 3) 使用pandas将所有记录转换为DataFrame
+    if not records:
+        print("没有成功读取到任何有效的测试结果。")
+        return
+
+    # 4) 使用pandas将所有记录转换为DataFrame
     df = pd.json_normalize(records)  # 将嵌套的JSON数据扁平化
 
-    # 4) 生成带日期的输出CSV文件路径并保存为双语CSV文件
+    # 5) 生成输出CSV文件路径并保存为双语CSV文件
     current_date = datetime.now().strftime("%Y%m%d")
-    out_csv = os.path.join(RESULT_DIR, f"aggregate_results_{current_date}.csv")
+    if target_dir:
+        out_csv = os.path.join(target_path, f"aggregate_results_{current_date}.csv")
+    else:
+        out_csv = os.path.join(RESULT_DIR, f"aggregate_results_{current_date}.csv")
+    
     save_bilingual_csv(df, out_csv)
 
     print(f"已聚合 {len(records)} 个测试结果 → {out_csv}")
@@ -306,12 +411,15 @@ def main():
         python main.py single --model /path/to/model --base-url http://localhost:8010 --max-concurrency 16 --random-input-len 512 --random-output-len 512
 
         # 聚合结果
-        python main.py aggregate
+        python main.py aggregate                                    # 聚合最新的结果目录
+        python main.py aggregate --list                            # 列出所有可用的结果目录
+        python main.py aggregate --dir DeepSeek-R1_20250728_145302 # 聚合指定的结果目录
 
         功能说明:
-        batch     - 根据config.yaml配置文件执行批量压测，支持多种参数组合的笛卡尔积测试
-        single    - 执行单次压测，适合快速测试特定参数配置
-        aggregate - 聚合results目录下的所有JSON结果文件，生成双语CSV报告
+        batch     - 根据config.yaml配置文件执行批量压测，结果按模型名称和时间组织到子目录
+        single    - 执行单次压测，结果按模型名称和时间组织到子目录
+        aggregate - 聚合指定目录下的JSON结果文件，生成双语CSV报告
+                   支持 --list 查看可用目录，--dir 指定目录（默认使用最新的）
         """
     )
 
@@ -334,14 +442,18 @@ def main():
 
     # 聚合结果子命令
     agg_parser = subparsers.add_parser('aggregate', help='聚合压测结果')
+    agg_parser.add_argument('--dir', help='指定要聚合的结果目录名（不指定则使用最新的）')
+    agg_parser.add_argument('--list', action='store_true', help='列出所有可用的结果目录')
 
     args = parser.parse_args()
 
     if args.command == 'batch':
         print("=== 开始批量压测 ===")
         print(f"使用配置文件: {args.config}")
-        batch_benchmark(args.config)
+        result_dir = batch_benchmark(args.config)
         print("=== 批量压测完成 ===")
+        print(f"结果已保存到: {result_dir}")
+        print(f"可使用以下命令聚合结果: python main.py aggregate --dir {os.path.basename(result_dir)}")
 
     elif args.command == 'single':
         print("=== 开始单次压测 ===")
@@ -352,7 +464,7 @@ def main():
         print(f"输入长度: {args.random_input_len}")
         print(f"输出长度: {args.random_output_len}")
 
-        single_benchmark(
+        result_dir = single_benchmark(
             model=args.model,
             base_url=args.base_url,
             num_prompts=args.num_prompts,
@@ -362,11 +474,26 @@ def main():
             tokenizer=args.tokenizer
         )
         print("=== 单次压测完成 ===")
+        print(f"结果已保存到: {result_dir}")
+        print(f"可使用以下命令聚合结果: python main.py aggregate --dir {os.path.basename(result_dir)}")
 
     elif args.command == 'aggregate':
-        print("=== 开始聚合结果 ===")
-        aggregate_results()
-        print("=== 结果聚合完成 ===")
+        if args.list:
+            print("=== 可用的结果目录 ===")
+            available_dirs = get_available_result_dirs()
+            if available_dirs:
+                for i, dir_name in enumerate(available_dirs, 1):
+                    dir_path = os.path.join(RESULT_DIR, dir_name)
+                    json_count = len(glob.glob(os.path.join(dir_path, "*.json")))
+                    print(f"{i}. {dir_name} ({json_count} 个JSON文件)")
+            else:
+                print("未找到任何结果目录")
+        else:
+            print("=== 开始聚合结果 ===")
+            if args.dir:
+                print(f"指定聚合目录: {args.dir}")
+            aggregate_results(args.dir)
+            print("=== 结果聚合完成 ===")
 
     else:
         parser.print_help()
