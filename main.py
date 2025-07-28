@@ -174,7 +174,7 @@ def batch_benchmark(config_file=DEFAULT_CONFIG_FILE):
 
     # 构建所有压测共用的命令行参数
     common_args = [
-        "python3", BENCHMARK_SCRIPT,
+        "python3", "-m", "src.core.benchmark_serving",
         "--backend", "vllm",                          # 使用vLLM后端
         "--model", model,                             # 指定模型
         "--base-url", base_url,                       # vLLM服务器URL
@@ -206,7 +206,7 @@ def single_benchmark(model, base_url, num_prompts=100, max_concurrency=10,
     """
     # 构建命令行参数
     cmd = [
-        'python3', BENCHMARK_SCRIPT,
+        'python3', '-m', 'src.core.benchmark_serving',
         '--backend', 'vllm',
         '--model', model,
         '--base-url', base_url,
