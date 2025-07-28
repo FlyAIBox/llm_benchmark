@@ -137,7 +137,7 @@ Thumbs.db
 *.pt
 models/
 checkpoints/
-datasets/
+# datasets/
 data/
 
 # MLflow

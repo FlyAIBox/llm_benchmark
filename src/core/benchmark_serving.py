@@ -51,7 +51,7 @@ from tqdm.asyncio import tqdm                      # 异步进度条
 from transformers import PreTrainedTokenizerBase   # HuggingFace分词器基类
 
 # 导入后端请求处理相关模块
-from backend_request_func import (
+from ..backends.backend_request_func import (
     ASYNC_REQUEST_FUNCS,           # 异步请求函数映射
     OPENAI_COMPATIBLE_BACKENDS,    # OpenAI兼容后端列表
     RequestFuncInput,              # 请求输入数据结构
@@ -62,7 +62,7 @@ from backend_request_func import (
 try:
     from vllm.transformers_utils.tokenizer import get_tokenizer
 except ImportError:
-    from backend_request_func import get_tokenizer
+    from ..backends.backend_request_func import get_tokenizer
 
 # 尝试使用vLLM的灵活参数解析器，如果失败则使用标准解析器
 try:
@@ -71,7 +71,7 @@ except ImportError:
     from argparse import ArgumentParser as FlexibleArgumentParser
 
 # 导入各种数据集处理类
-from benchmark_dataset import (
+from ..data_processing.benchmark_dataset import (
     AIMODataset,                   # AIMO数学竞赛数据集
     ASRDataset,                    # 自动语音识别数据集
     BurstGPTDataset,               # BurstGPT数据集
@@ -88,7 +88,7 @@ from benchmark_dataset import (
 )
 
 # 导入工具函数
-from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
+from ..utils.benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
 
 # 毫秒到秒的转换常数
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000

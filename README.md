@@ -85,22 +85,33 @@ vllm serve deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
     --disable-log-requests
 ```
 
-### 2. 执行批量压测
+### 2. 使用统一入口脚本（推荐）⭐
 
+#### 批量压测
 根据`config.yaml`中的配置开始压测：
-
 ```bash
-python3 run.py
+python main.py batch
 ```
 
-压测结果将保存在`results/`目录中，每个测试用例生成一个独立的`.json`文件。
-
-### 3. 单独运行压测（可选）
-
-你也可以直接使用`benchmark_serving.py`进行单次压测：
-
+#### 单次压测
 ```bash
-python3 benchmark_serving.py \
+python main.py single \
+    --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
+    --base-url http://localhost:8010 \
+    --num-prompts 100 \
+    --max-concurrency 10
+```
+
+#### 聚合结果
+```bash
+python main.py aggregate
+```
+
+### 3. 使用原有方式（兼容）
+
+#### 单次压测
+```bash
+python3 src/core/benchmark_serving.py \
     --backend vllm \
     --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
     --base-url http://localhost:8010 \
@@ -111,14 +122,17 @@ python3 benchmark_serving.py \
     --max-concurrency 10
 ```
 
+
+
 ---
 
 ## 📊 结果聚合
 
-所有压测完成后，运行以下命令聚合结果：
+所有压测完成后，可以使用以下任一方式聚合结果：
 
+**推荐方式：**
 ```bash
-python3 aggregate_result.py
+python main.py aggregate
 ```
 
 这将生成一个汇总文件`results/aggregate_results_{日期}.csv`，包含所有测试用例的性能指标。
@@ -152,20 +166,42 @@ python3 aggregate_result.py
 
 ```
 vllm_benchmark_serving/
-├── backend_request_func.py      # 后端请求处理函数
-├── benchmark_serving.py         # 主压测脚本
-├── benchmark_dataset.py         # 数据集处理模块
-├── benchmark_utils.py           # 工具函数
-├── aggregate_result.py          # 结果聚合脚本
-├── run.py                 # 批量执行脚本
-├── config.yaml                  # 参数配置文件
-├── requirements.txt             # Python依赖
-├── README.md                    # 英文说明文档
-├── README.md                 # 中文说明文档
-└── results/                     # 压测结果目录
-    ├── bench_io256x256_mc1_np10.json
-    ├── bench_io256x256_mc4_np40.json
-    └── aggregate_results_20250727.csv
+├── README.md                           # 项目说明文档
+├── config.yaml                         # 压测配置文件
+├── requirements.txt                    # Python依赖包
+├── main.py                            # 统一入口脚本 ⭐集成所有功能
+│
+├── src/                               # 源代码目录 ⭐新增
+│   ├── __init__.py
+│   ├── core/                          # 核心模块
+│   │   ├── __init__.py
+│   │   └── benchmark_serving.py       # 主压测引擎
+│   ├── datasets/                      # 数据集处理模块
+│   │   ├── __init__.py
+│   │   └── benchmark_dataset.py       # 数据集处理框架
+│   ├── backends/                      # 后端请求处理模块
+│   │   ├── __init__.py
+│   │   └── backend_request_func.py    # 后端请求函数
+│   ├── utils/                         # 工具函数模块
+│   │   ├── __init__.py
+│   │   └── benchmark_utils.py         # 通用工具函数
+│   └── aggregation/                   # 结果聚合模块
+│       ├── __init__.py
+│       └── aggregate_result.py        # 结果聚合处理
+│
+├── docs/                              # 文档目录 ⭐新增
+│   ├── architecture.md                # 系统架构图
+│   ├── data_flow.md                   # 数据流程图
+│   └── project_structure.md           # 项目结构说明
+│
+├── results/                           # 压测结果目录
+│   ├── bench_io256x256_mc1_np10.json
+│   ├── bench_io256x256_mc4_np40.json
+│   └── aggregate_results_20250727.csv
+│
+└── .kiro/                             # Kiro IDE配置 ⭐新增
+    └── steering/
+        └── project_guidelines.md
 ```
 
 ---
@@ -189,15 +225,10 @@ vllm_benchmark_serving/
    - 提供统一的数据采样接口
    - 支持多模态数据处理
 
-4. **run.py** - 批量执行控制器
-   - 根据配置文件自动生成参数组合
-   - 并行执行多个压测任务
-   - 管理结果文件命名和存储
-
-5. **aggregate_result.py** - 结果聚合工具
-   - 合并多个JSON结果文件
-   - 生成CSV格式的汇总报告
-   - 提取关键性能指标
+4. **main.py** - 统一入口脚本
+   - 集成批量压测、单次压测和结果聚合功能
+   - 提供统一的命令行接口
+   - 支持配置文件驱动的批量测试
 
 ---
 

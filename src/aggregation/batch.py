@@ -13,7 +13,7 @@ import subprocess
 import os
 
 # benchmark_serving.py脚本的路径（根据实际位置调整相对路径）
-BENCHMARK_SCRIPT = "benchmark_serving.py"
+BENCHMARK_SCRIPT = "src/core/benchmark_serving.py"
 # YAML配置文件路径
 CONFIG_FILE = "config.yaml"
 
