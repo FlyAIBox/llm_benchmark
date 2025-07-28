@@ -296,22 +296,22 @@ def main():
         description="vLLM推理服务压测工具 - 集成批量压测、单次压测和结果聚合功能",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
-  # 批量压测（根据config.yaml配置）
-  python main.py batch
-  python main.py batch --config custom_config.yaml
+        使用示例:
+        # 批量压测（根据config.yaml配置）
+        python main.py batch
+        python main.py batch --config custom_config.yaml
 
-  # 单次压测
-  python main.py single --model deepseek-ai/DeepSeek-R1 --base-url http://localhost:8010 --num-prompts 100
-  python main.py single --model /path/to/model --base-url http://localhost:8010 --max-concurrency 16 --random-input-len 512 --random-output-len 512
+        # 单次压测
+        python main.py single --model deepseek-ai/DeepSeek-R1 --base-url http://localhost:8010 --num-prompts 100
+        python main.py single --model /path/to/model --base-url http://localhost:8010 --max-concurrency 16 --random-input-len 512 --random-output-len 512
 
-  # 聚合结果
-  python main.py aggregate
+        # 聚合结果
+        python main.py aggregate
 
-功能说明:
-  batch     - 根据config.yaml配置文件执行批量压测，支持多种参数组合的笛卡尔积测试
-  single    - 执行单次压测，适合快速测试特定参数配置
-  aggregate - 聚合results目录下的所有JSON结果文件，生成双语CSV报告
+        功能说明:
+        batch     - 根据config.yaml配置文件执行批量压测，支持多种参数组合的笛卡尔积测试
+        single    - 执行单次压测，适合快速测试特定参数配置
+        aggregate - 聚合results目录下的所有JSON结果文件，生成双语CSV报告
         """
     )
 
