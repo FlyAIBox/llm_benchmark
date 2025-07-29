@@ -29,60 +29,79 @@
 # 1. 批量压测（结果自动保存到 results/模型名_时间戳/ 目录）
 python main.py batch
 
+# 2. 聚合最新的测试结果
+python main.py aggregate
+
+# 3. 生成可视化报告
+python main.py visualize
+```
+
+### 四步完整体验
+
+```bash
+# 1. 批量压测
+python main.py batch
+
 # 2. 查看可用的结果目录
 python main.py aggregate --list
 
-# 3. 聚合最新的测试结果并生成可视化报告
-python main.py aggregate
+# 3. 聚合指定的测试结果
+python main.py aggregate --dir DeepSeek-R1_20250728_152452
+
+# 4. 生成多种模式的可视化报告
+python main.py visualize --mode both --output comprehensive_reports
 ```
 
 ### 🎯 可视化功能
 
-工具提供了两种可视化方案：
+工具提供统一的可视化命令，支持多种模式：
 
-#### 1. 简单可视化（推荐，无外部依赖）
+#### 统一可视化命令 ⭐（推荐）
 ```bash
-# 自动查找最新的聚合结果并生成报告
-python visualize_results_simple.py
+# 自动查找最新的聚合结果，生成完整版报告
+python main.py visualize
+
+# 生成简化版报告（基础图表，无外部依赖）
+python main.py visualize --mode simple
+
+# 生成两种模式的报告
+python main.py visualize --mode both --output all_charts
 
 # 指定特定的CSV文件
-python visualize_results_simple.py --csv results/DeepSeek-R1_20250728_152452/aggregate_results_20250728.csv
+python main.py visualize --csv results/DeepSeek-R1_20250728_152452/aggregate_results_20250728.csv
 ```
 
-生成的报告包括：
-- **performance_report.txt** - 详细性能报告（中英文对照）
-- **performance_summary.csv** - 性能摘要表格
-- **ascii_charts.txt** - ASCII字符图表
-- **performance_ranking.txt** - 性能排名分析
+**可视化模式说明**：
 
-#### 2. 高级可视化（需要matplotlib等依赖）
+1. **simple模式**（基础图表）
+   - 吞吐量对比图、延迟对比图、性能热力图
+   - 自动处理中文字体问题
+   - 无需额外依赖包
 
-##### 标准版本
+2. **advanced模式**（完整报告，默认）
+   - 包含simple模式的所有图表
+   - 额外提供综合仪表板
+   - 详细的性能报告文本文件
+
+3. **both模式**（两种模式）
+   - 同时生成simple和advanced两种报告
+   - 分别保存在子目录中
+
+#### 传统方式（兼容性保留）
 ```bash
-# 生成专业图表（需要先安装matplotlib, seaborn等）
-python visualize_results.py
+# 直接使用可视化脚本
+python src/visualize/visualize_simple.py --csv results/xxx.csv --output charts
+python src/visualize/visualize_results.py --csv results/xxx.csv --output charts
 ```
 
-##### 简化版本（推荐，解决中文字体问题）⭐
-```bash
-# 使用优化的简化版脚本，自动处理中文字体显示问题
-python src/visualize/visualize_simple.py \
-    --csv results/DeepSeek-R1_20250728_152452/aggregate_results_20250728.csv \
-    --output charts_output
-```
-
-**简化版优势**：
-- ✅ 自动检测和配置中文字体
-- ✅ 英文标签优先，确保兼容性
-- ✅ 无需手动安装字体依赖
-- ✅ 生成高质量PNG图表
-
-生成的图表包括：
+**生成的文件**：
 - **throughput_comparison.png** - 吞吐量对比图
-- **latency_comparison.png** - 延迟性能对比图
+- **latency_comparison.png** - 延迟性能对比图  
 - **performance_heatmap.png** - 性能热力图
+- **comprehensive_dashboard.png** - 综合仪表板（仅advanced模式）
+- **performance_report.txt** - 详细性能报告（仅advanced模式）
 
-> **💡 提示**：如果遇到中文字体显示问题，建议使用简化版可视化脚本，或参考[故障排除](#故障排除)部分的解决方案。
+> **💡 提示**：推荐使用统一的`python main.py visualize`命令，支持自动查找最新CSV文件和多种报告模式。
 
 #### 关键指标说明
 

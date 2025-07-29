@@ -19,77 +19,105 @@ import matplotlib.font_manager as fm
 def setup_chinese_font():
     """设置中文字体支持"""
     import os
+    import shutil
+    
+    # 清理matplotlib字体缓存
+    try:
+        cache_dir = os.path.join(os.path.expanduser('~'), '.matplotlib')
+        if os.path.exists(cache_dir):
+            print("清理matplotlib字体缓存...")
+            shutil.rmtree(cache_dir, ignore_errors=True)
+    except Exception as e:
+        print(f"清理缓存失败（忽略）: {e}")
+    
+    # 重新加载字体管理器
+    fm.fontManager.__init__()
 
     # 直接指定字体文件路径，优先使用字符集更完整的中文字体
     font_files = [
-        '/usr/share/fonts/truetype/arphic/uming.ttc',      # AR PL UMing CN - 字符集最完整
-        '/usr/share/fonts/truetype/arphic/ukai.ttc',       # AR PL UKai CN - 楷体
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',  # Noto CJK - 优先
+        '/usr/share/fonts/truetype/arphic/uming.ttc',      # AR PL UMing CN
+        '/usr/share/fonts/truetype/arphic/ukai.ttc',       # AR PL UKai CN
         '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',  # WenQuanYi Micro Hei
         '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',    # WenQuanYi Zen Hei
-        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'  # Noto CJK
     ]
 
     # 尝试添加字体文件
     selected_font = None
+    available_chinese_fonts = []
+    
     for font_file in font_files:
         if os.path.exists(font_file):
             try:
                 # 添加字体到matplotlib
                 fm.fontManager.addfont(font_file)
 
-                # 获取字体名称，优先选择简体中文字体
-                sc_fonts = []  # 简体中文字体
-                other_fonts = []  # 其他字体
-
+                # 获取字体名称
                 for font in fm.fontManager.ttflist:
                     if font.fname == font_file:
-                        if 'CJK SC' in font.name:  # 简体中文字体
-                            sc_fonts.append(font.name)
-                        else:
-                            other_fonts.append(font.name)
-
-                # 优先选择简体中文字体
-                if sc_fonts:
-                    selected_font = sc_fonts[0]
-                elif other_fonts:
-                    selected_font = other_fonts[0]
-
-                if selected_font:
-                    print(f"成功添加中文字体: {selected_font} ({font_file})")
-                    break
+                        font_name = font.name
+                        if any(keyword in font_name for keyword in ['CJK', 'CN', 'UMing', 'UKai', 'WenQuanYi']):
+                            available_chinese_fonts.append(font_name)
+                            if not selected_font:
+                                selected_font = font_name
+                                print(f"✓ 成功添加中文字体: {selected_font} ({font_file})")
             except Exception as e:
-                print(f"添加字体失败 {font_file}: {e}")
+                print(f"✗ 添加字体失败 {font_file}: {e}")
 
-    # 备用字体名称列表
+    # 备用字体名称列表（系统预装的字体）
     fallback_fonts = [
         'Noto Sans CJK SC',
         'Noto Serif CJK SC',
+        'AR PL UMing CN',
+        'AR PL UKai CN', 
         'WenQuanYi Micro Hei',
         'WenQuanYi Zen Hei',
         'SimHei',
-        'Microsoft YaHei'
+        'Microsoft YaHei',
+        'PingFang SC',
+        'Hiragino Sans GB'
     ]
 
     # 如果直接添加字体失败，尝试使用系统字体名称
     if not selected_font:
+        print("尝试查找系统预装的中文字体...")
         available_fonts = [f.name for f in fm.fontManager.ttflist]
         for font in fallback_fonts:
             if font in available_fonts:
                 selected_font = font
-                print(f"使用系统中文字体: {selected_font}")
+                print(f"✓ 使用系统中文字体: {selected_font}")
                 break
 
-    # 设置字体
+    # 强制设置字体参数
     if selected_font:
-        plt.rcParams['font.sans-serif'] = [selected_font] + ['DejaVu Sans', 'Arial', 'Liberation Sans']
+        # 设置多个备选字体确保覆盖
+        font_list = [selected_font] + available_chinese_fonts + ['DejaVu Sans', 'Arial', 'Liberation Sans']
+        # 去重
+        font_list = list(dict.fromkeys(font_list))
+        
+        plt.rcParams['font.sans-serif'] = font_list
+        plt.rcParams['font.family'] = 'sans-serif'
+        
+        # 强制设置所有相关的字体参数
+        plt.rcParams['axes.unicode_minus'] = False
+        plt.rcParams['figure.titlesize'] = 'large'
+        
+        print(f"✓ 字体设置完成，字体列表: {font_list[:3]}...")
+        
+        # 验证字体设置
+        current_font = plt.rcParams['font.sans-serif'][0]
+        print(f"✓ 当前使用字体: {current_font}")
+        
     else:
-        print("警告: 未找到中文字体，将使用默认字体（可能无法正确显示中文）")
+        print("⚠️  警告: 未找到中文字体，图表中的中文可能显示为方框")
+        print("建议安装字体: sudo apt-get install fonts-noto-cjk")
         plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Liberation Sans']
+        plt.rcParams['axes.unicode_minus'] = False
 
-    plt.rcParams['axes.unicode_minus'] = False
+    return selected_font
 
 # 初始化字体设置
-setup_chinese_font()
+font_status = setup_chinese_font()
 
 # 设置图表样式
 sns.set_style("whitegrid")

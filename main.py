@@ -399,7 +399,7 @@ def aggregate_results(target_dir=None):
     try:
         import subprocess
         result = subprocess.run([
-            'python3', 'src/visualize/visualize_results_simple.py', 
+            'python3', 'src/visualize/visualize_simple.py', 
             '--csv', out_csv,
             '--output', 'reports'
         ], capture_output=True, text=True)
@@ -411,7 +411,113 @@ def aggregate_results(target_dir=None):
             print(f"可视化报告生成失败: {result.stderr}")
     except Exception as e:
         print(f"可视化报告生成出错: {e}")
-        print("可手动运行: python3 src/visualize/visualize_results_simple.py")
+        print("可手动运行: python3 src/visualize/visualize_simple.py")
+
+
+def visualize_results(csv_path=None, output_dir="charts", mode="advanced"):
+    """
+    生成可视化报告
+    
+    参数:
+        csv_path (str): CSV文件路径，如果为None则自动查找最新的
+        output_dir (str): 输出目录
+        mode (str): 模式，"simple"或"advanced"
+    """
+    
+    def find_latest_csv():
+        """查找最新的聚合结果CSV文件"""
+        csv_files = glob.glob("results/*/aggregate_results_*.csv")
+        if not csv_files:
+            csv_files = glob.glob("results/aggregate_results_*.csv")
+        
+        if not csv_files:
+            return None
+        
+        # 按修改时间排序，返回最新的
+        csv_files.sort(key=os.path.getmtime, reverse=True)
+        return csv_files[0]
+    
+    # 确定CSV文件路径
+    if csv_path is None:
+        csv_path = find_latest_csv()
+        if not csv_path:
+            print("错误: 未找到聚合结果CSV文件")
+            print("请先运行 'python main.py aggregate' 生成聚合结果")
+            return False
+        print(f"使用最新的CSV文件: {csv_path}")
+    
+    if not os.path.exists(csv_path):
+        print(f"错误: CSV文件不存在: {csv_path}")
+        return False
+    
+    # 创建输出目录
+    os.makedirs(output_dir, exist_ok=True)
+    
+    print(f"正在生成可视化报告...")
+    print(f"模式: {mode}")
+    print(f"输入文件: {csv_path}")
+    print(f"输出目录: {output_dir}")
+    
+    try:
+        if mode == "simple":
+            # 使用简化版可视化脚本
+            result = subprocess.run([
+                'python3', 'src/visualize/visualize_simple.py', 
+                '--csv', csv_path,
+                '--output', output_dir
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print("✓ 简化版可视化报告生成成功")
+                print("生成的文件:")
+                print("  - throughput_comparison.png    (吞吐量对比)")
+                print("  - latency_comparison.png       (延迟对比)")
+                print("  - performance_heatmap.png      (性能热力图)")
+            else:
+                print(f"简化版可视化报告生成失败: {result.stderr}")
+                return False
+                
+        elif mode == "advanced":
+            # 使用完整版可视化脚本
+            result = subprocess.run([
+                'python3', 'src/visualize/visualize_results.py',
+                '--csv', csv_path,
+                '--output', output_dir
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print("✓ 完整版可视化报告生成成功")
+                print("生成的文件:")
+                print("  - throughput_comparison.png    (吞吐量对比)")
+                print("  - latency_comparison.png       (延迟对比)")
+                print("  - performance_heatmap.png      (性能热力图)")
+                print("  - comprehensive_dashboard.png  (综合仪表板)")
+                print("  - performance_report.txt       (性能报告)")
+            else:
+                print(f"完整版可视化报告生成失败: {result.stderr}")
+                return False
+                
+        elif mode == "both":
+            # 生成两种模式的报告
+            simple_dir = os.path.join(output_dir, "simple")
+            advanced_dir = os.path.join(output_dir, "advanced")
+            
+            print("正在生成简化版报告...")
+            visualize_results(csv_path, simple_dir, "simple")
+            
+            print("正在生成完整版报告...")
+            visualize_results(csv_path, advanced_dir, "advanced")
+            
+        else:
+            print(f"错误: 不支持的模式 '{mode}'，支持的模式: simple, advanced, both")
+            return False
+    
+    except Exception as e:
+        print(f"可视化报告生成出错: {e}")
+        return False
+    
+    print(f"\n所有可视化文件已保存到: {output_dir}/")
+    return True
 
 
 def main():
@@ -434,11 +540,19 @@ def main():
         python main.py aggregate --list                            # 列出所有可用的结果目录
         python main.py aggregate --dir DeepSeek-R1_20250728_145302 # 聚合指定的结果目录
 
+        # 生成可视化报告
+        python main.py visualize                                    # 自动查找最新CSV文件，生成完整版报告
+        python main.py visualize --csv results/aggregate_results_20250728.csv  # 指定CSV文件
+        python main.py visualize --mode simple --output simple_charts          # 生成简化版报告
+        python main.py visualize --mode both --output all_charts               # 生成两种模式的报告
+
         功能说明:
         batch     - 根据config.yaml配置文件执行批量压测，结果按模型名称和时间组织到子目录
         single    - 执行单次压测，结果按模型名称和时间组织到子目录
         aggregate - 聚合指定目录下的JSON结果文件，生成双语CSV报告
                    支持 --list 查看可用目录，--dir 指定目录（默认使用最新的）
+        visualize - 生成可视化性能报告，支持simple(基础图表)、advanced(完整报告)、both(两种模式)
+                   支持自动查找最新CSV文件，或手动指定CSV文件路径
         """
     )
 
@@ -463,6 +577,13 @@ def main():
     agg_parser = subparsers.add_parser('aggregate', help='聚合压测结果')
     agg_parser.add_argument('--dir', help='指定要聚合的结果目录名（不指定则使用最新的）')
     agg_parser.add_argument('--list', action='store_true', help='列出所有可用的结果目录')
+    
+    # 可视化子命令
+    viz_parser = subparsers.add_parser('visualize', help='生成可视化报告')
+    viz_parser.add_argument('--csv', help='指定CSV文件路径（不指定则自动查找最新的聚合结果）')
+    viz_parser.add_argument('--output', default='charts', help='输出目录 (默认: charts)')
+    viz_parser.add_argument('--mode', choices=['simple', 'advanced', 'both'], default='advanced',
+                           help='可视化模式: simple(基础图表), advanced(完整报告), both(生成两种模式) (默认: advanced)')
 
     args = parser.parse_args()
 
@@ -513,6 +634,19 @@ def main():
                 print(f"指定聚合目录: {args.dir}")
             aggregate_results(args.dir)
             print("=== 结果聚合完成 ===")
+
+    elif args.command == 'visualize':
+        print("=== 开始生成可视化报告 ===")
+        success = visualize_results(
+            csv_path=args.csv,
+            output_dir=args.output,
+            mode=args.mode
+        )
+        if success:
+            print("=== 可视化报告生成完成 ===")
+            print(f"报告已保存到: {args.output}")
+        else:
+            print("=== 可视化报告生成失败 ===")
 
     else:
         parser.print_help()
