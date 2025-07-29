@@ -22,10 +22,10 @@ def setup_chinese_font():
     try:
         cache_dir = os.path.join(os.path.expanduser('~'), '.matplotlib')
         if os.path.exists(cache_dir):
-            print("清理matplotlib字体缓存...")
+            print("Clearing matplotlib font cache...")
             shutil.rmtree(cache_dir, ignore_errors=True)
     except Exception as e:
-        print(f"清理缓存失败（忽略）: {e}")
+        print(f"Failed to clear cache (ignored): {e}")
     
     # 重新加载字体管理器
     fm.fontManager.__init__()
@@ -57,9 +57,9 @@ def setup_chinese_font():
                             available_chinese_fonts.append(font_name)
                             if not selected_font:
                                 selected_font = font_name
-                                print(f"✓ 成功添加中文字体: {selected_font} ({font_file})")
+                                print(f"✓ Successfully added Chinese font: {selected_font} ({font_file})")
             except Exception as e:
-                print(f"✗ 添加字体失败 {font_file}: {e}")
+                print(f"✗ Failed to add font {font_file}: {e}")
     
     # 备用字体名称列表（系统预装的字体）
     fallback_fonts = [
@@ -77,12 +77,12 @@ def setup_chinese_font():
     
     # 如果直接添加字体失败，尝试使用系统字体名称
     if not selected_font:
-        print("尝试查找系统预装的中文字体...")
+        print("Searching for system pre-installed Chinese fonts...")
         available_fonts = [f.name for f in fm.fontManager.ttflist]
         for font in fallback_fonts:
             if font in available_fonts:
                 selected_font = font
-                print(f"✓ 使用系统中文字体: {selected_font}")
+                print(f"✓ Using system Chinese font: {selected_font}")
                 break
     
     # 强制设置字体参数
@@ -99,15 +99,15 @@ def setup_chinese_font():
         plt.rcParams['axes.unicode_minus'] = False
         plt.rcParams['figure.titlesize'] = 'large'
         
-        print(f"✓ 字体设置完成，字体列表: {font_list[:3]}...")
-        
+        print(f"✓ Font setup completed, font list: {font_list[:3]}...")
+
         # 验证字体设置
         current_font = plt.rcParams['font.sans-serif'][0]
-        print(f"✓ 当前使用字体: {current_font}")
-        
+        print(f"✓ Current font in use: {current_font}")
+
     else:
-        print("⚠️  警告: 未找到中文字体，图表中的中文可能显示为方框")
-        print("建议安装字体: sudo apt-get install fonts-noto-cjk")
+        print("⚠️  Warning: No Chinese font found, Chinese characters may display as boxes")
+        print("Recommended: sudo apt-get install fonts-noto-cjk")
         plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Liberation Sans']
         plt.rcParams['axes.unicode_minus'] = False
     
@@ -117,8 +117,8 @@ def setup_chinese_font():
 font_status = setup_chinese_font()
 
 def create_throughput_comparison(df, output_dir):
-    """创建吞吐量对比图表"""
-    print("正在生成吞吐量对比图表...")
+    """Create throughput comparison charts"""
+    print("Generating throughput comparison charts...")
     
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
     fig.suptitle('Throughput Performance Comparison', fontsize=16, fontweight='bold')
@@ -185,8 +185,8 @@ def create_throughput_comparison(df, output_dir):
     print("✓ Throughput comparison chart generated")
 
 def create_latency_comparison(df, output_dir):
-    """创建延迟对比图表"""
-    print("正在生成延迟对比图表...")
+    """Create latency comparison charts"""
+    print("Generating latency comparison charts...")
     
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
     fig.suptitle('Latency Performance Comparison', fontsize=16, fontweight='bold')
@@ -230,8 +230,8 @@ def create_latency_comparison(df, output_dir):
     print("✓ Latency comparison chart generated")
 
 def create_performance_heatmap(df, output_dir):
-    """创建性能热力图"""
-    print("正在生成性能热力图...")
+    """Create performance heatmap"""
+    print("Generating performance heatmap...")
     
     # 选择关键性能指标
     metrics = [
@@ -270,27 +270,27 @@ def main():
     
     args = parser.parse_args()
     
-    # 创建输出目录
+    # Create output directory
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # 加载数据
+
+    # Load data
     print(f"Loading data: {args.csv}")
     df = pd.read_csv(args.csv)
 
-    # 检查是否第一行是中文标题，如果是则跳过
+    # Check if first row is Chinese header, skip if so
     if df.iloc[0]['date'] == '日期':
         df = df.iloc[1:].reset_index(drop=True)
-        print("检测到中文标题行，已跳过")
+        print("Detected Chinese header row, skipped")
 
-    # 创建配置名称
+    # Create configuration names
     df['config'] = df.apply(lambda row: f"io{row['input_len']}x{row['output_len']}_mc{row['max_concurrency']}_np{row['num_prompts']}", axis=1)
 
     print(f"Found {len(df)} test configurations")
-    
+
     print("Generating visualization charts...")
-    
-    # 生成各种图表
+
+    # Generate various charts
     create_throughput_comparison(df, output_dir)
     create_latency_comparison(df, output_dir)
     create_performance_heatmap(df, output_dir)
