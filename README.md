@@ -56,16 +56,33 @@ python visualize_results_simple.py --csv results/DeepSeek-R1_20250728_152452/agg
 - **performance_ranking.txt** - 性能排名分析
 
 #### 2. 高级可视化（需要matplotlib等依赖）
+
+##### 标准版本
 ```bash
 # 生成专业图表（需要先安装matplotlib, seaborn等）
 python visualize_results.py
 ```
 
+##### 简化版本（推荐，解决中文字体问题）⭐
+```bash
+# 使用优化的简化版脚本，自动处理中文字体显示问题
+python src/visualize/visualize_simple.py \
+    --csv results/DeepSeek-R1_20250728_152452/aggregate_results_20250728.csv \
+    --output charts_output
+```
+
+**简化版优势**：
+- ✅ 自动检测和配置中文字体
+- ✅ 英文标签优先，确保兼容性
+- ✅ 无需手动安装字体依赖
+- ✅ 生成高质量PNG图表
+
 生成的图表包括：
-- 吞吐量对比图
-- 延迟性能对比图  
-- 性能热力图
-- 综合仪表板
+- **throughput_comparison.png** - 吞吐量对比图
+- **latency_comparison.png** - 延迟性能对比图
+- **performance_heatmap.png** - 性能热力图
+
+> **💡 提示**：如果遇到中文字体显示问题，建议使用简化版可视化脚本，或参考[故障排除](#故障排除)部分的解决方案。
 
 #### 关键指标说明
 
@@ -284,9 +301,13 @@ vllm_benchmark_serving/
 │   ├── utils/                         # 工具函数模块
 │   │   ├── __init__.py
 │   │   └── benchmark_utils.py         # 通用工具函数
-│   └── aggregation/                   # 结果聚合模块
+│   ├── aggregation/                   # 结果聚合模块
+│   │   ├── __init__.py
+│   │   └── aggregate_result.py        # 结果聚合处理
+│   └── visualize/                     # 可视化模块 ⭐新增
 │       ├── __init__.py
-│       └── aggregate_result.py        # 结果聚合处理
+│       ├── visualize_results.py       # 标准可视化脚本
+│       └── visualize_simple.py        # 简化版可视化脚本（解决中文字体问题）
 │
 ├── docs/                              # 文档目录 ⭐新增
 │   ├── architecture.md                # 系统架构图
@@ -347,6 +368,7 @@ vllm_benchmark_serving/
 5. **网络延迟**: 考虑客户端到服务器的网络延迟影响
 6. **结果管理**: 利用新的目录结构管理不同时间和模型的测试结果 ⭐
 7. **对比分析**: 使用聚合功能对比不同配置下的性能表现 ⭐
+8. **可视化选择**: 优先使用简化版可视化脚本避免中文字体问题 ⭐
 
 ### 参数调优建议
 
@@ -354,6 +376,75 @@ vllm_benchmark_serving/
 - **请求数**: 确保足够的样本量（建议至少100个请求）
 - **输入长度**: 测试不同长度以评估模型在各种场景下的性能
 - **输出长度**: 考虑实际应用场景的输出长度分布
+
+---
+
+## 🔧 故障排除
+
+### 中文字体显示问题
+
+#### 问题现象
+在使用高级可视化功能时，可能会遇到以下问题：
+- 图表中的中文显示为小方块或空白
+- 控制台出现大量 "Glyph missing from current font" 警告
+- 中文标签无法正确渲染
+
+#### 问题原因
+1. **系统缺少中文字体**：原始系统只有基本的西文字体，缺少支持中文字符的字体
+2. **字体字符集不完整**：即使安装了一些中文字体，但字符集可能不够完整，无法显示所有中文字符
+3. **matplotlib字体配置问题**：matplotlib需要正确配置才能使用中文字体
+
+#### 解决方案
+
+##### 方案1：安装中文字体（推荐）
+```bash
+# 安装基础中文字体
+sudo apt update
+sudo apt install -y fonts-noto-cjk fonts-wqy-zenhei fonts-wqy-microhei
+
+# 安装更完整的中文字体包（推荐）
+sudo apt install -y fonts-noto-cjk-extra fonts-arphic-ukai fonts-arphic-uming
+```
+
+##### 方案2：使用简化版可视化脚本（无需额外配置）
+```bash
+# 使用专门优化的简化版脚本，自动处理中文字体问题
+python src/visualize/visualize_simple.py \
+    --csv results/DeepSeek-R1_20250728_152452/aggregate_results_20250728.csv \
+    --output charts_output
+```
+
+简化版脚本特点：
+- ✅ **自动字体检测**：智能检测并使用最适合的中文字体
+- ✅ **英文标签优先**：主要使用英文标签，确保兼容性
+- ✅ **无外部依赖**：不需要额外的字体配置
+- ✅ **完整功能**：生成吞吐量对比、延迟对比和性能热力图
+
+#### 字体优先级说明
+系统会按以下优先级自动选择字体：
+1. **AR PL UMing CN** - 字符集最完整，推荐使用
+2. **AR PL UKai CN** - 楷体风格
+3. **WenQuanYi Micro Hei** - 文泉驿微米黑
+4. **WenQuanYi Zen Hei** - 文泉驿正黑
+5. **Noto Sans CJK** - Google Noto字体
+
+#### 验证字体安装
+```bash
+# 检查已安装的中文字体
+fc-list :lang=zh-cn | head -10
+
+# 测试字体显示效果
+python -c "
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+plt.rcParams['font.sans-serif'] = ['AR PL UMing CN', 'DejaVu Sans']
+plt.figure(figsize=(8, 6))
+plt.text(0.5, 0.5, '中文字体测试', fontsize=20, ha='center')
+plt.title('Font Test / 字体测试')
+plt.savefig('font_test.png')
+print('字体测试图片已保存为 font_test.png')
+"
+```
 
 ---
 

@@ -20,11 +20,13 @@ def setup_chinese_font():
     """设置中文字体支持"""
     import os
 
-    # 直接指定字体文件路径，优先使用WenQuanYi字体（更好的中文支持）
+    # 直接指定字体文件路径，优先使用字符集更完整的中文字体
     font_files = [
-        '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',
-        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
-        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
+        '/usr/share/fonts/truetype/arphic/uming.ttc',      # AR PL UMing CN - 字符集最完整
+        '/usr/share/fonts/truetype/arphic/ukai.ttc',       # AR PL UKai CN - 楷体
+        '/usr/share/fonts/truetype/wqy/wqy-microhei.ttc',  # WenQuanYi Micro Hei
+        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',    # WenQuanYi Zen Hei
+        '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'  # Noto CJK
     ]
 
     # 尝试添加字体文件
