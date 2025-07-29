@@ -48,6 +48,7 @@ tqdm==4.67.1
 matplotlib==3.7.0
 seaborn==0.11.0
 plotly==5.0.0
+scikit-learn==1.3.0  # 机器学习库（用于数据标准化）
 
 # 其他工具依赖
 pyyaml==6.0.2  # YAML配置文件解析

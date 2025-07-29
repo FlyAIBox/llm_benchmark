@@ -159,5 +159,7 @@ benchmark_results/
 performance_logs/
 *.csv
 *.json
-!aggregate_results.csv
-results/aggregate_results.csv
+results
+reports/
+font_test.png
+font_test_fixed.png

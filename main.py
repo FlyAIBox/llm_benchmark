@@ -393,6 +393,25 @@ def aggregate_results(target_dir=None):
 
     print(f"已聚合 {len(records)} 个测试结果 → {out_csv}")
     print("CSV文件格式：第一行为英文列名，第二行为中文列名，第三行开始为数据")
+    
+    # 自动生成可视化报告
+    print("\n正在生成可视化报告...")
+    try:
+        import subprocess
+        result = subprocess.run([
+            'python3', 'src/visualize/visualize_results_simple.py', 
+            '--csv', out_csv,
+            '--output', 'reports'
+        ], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print("✓ 可视化报告生成成功")
+            print("报告文件位置: reports/")
+        else:
+            print(f"可视化报告生成失败: {result.stderr}")
+    except Exception as e:
+        print(f"可视化报告生成出错: {e}")
+        print("可手动运行: python3 src/visualize/visualize_results_simple.py")
 
 
 def main():
