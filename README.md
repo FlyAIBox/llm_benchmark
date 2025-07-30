@@ -182,6 +182,39 @@ python main.py aggregate
 # 聚合指定的结果目录
 python main.py aggregate --dir DeepSeek-R1_20250728_145302
 ```
+### 聚合功能特点
+
+- **自动目录识别**: 自动按模型名称和测试时间组织结果
+- **智能选择**: 默认聚合最新的测试结果
+- **灵活指定**: 支持指定特定的结果目录进行聚合
+
+
+聚合后会在对应目录下生成汇总文件`aggregate_results_{日期}.csv`，包含该次测试的所有性能指标。
+
+### 双语输出格式
+
+生成的CSV文件采用双语格式：
+- **第1行**：英文列名
+- **第2行**：中文列名  
+- **第3行开始**：实际数据
+
+这种格式便于中英文用户理解和使用，同时保持了数据的标准化。
+
+### 输出指标说明
+
+聚合结果包含以下关键指标：
+
+- `completed`: 成功完成的请求数
+- `request_throughput`: 请求吞吐量（请求/秒）
+- `output_throughput`: 输出token吞吐量（token/秒）
+- `mean_ttft_ms`: 平均首token时间（毫秒）
+- `median_ttft_ms`: 首token时间中位数（毫秒）
+- `p99_ttft_ms`: 首token时间99百分位数（毫秒）
+- `mean_tpot_ms`: 平均每token输出时间（毫秒）
+- `mean_itl_ms`: 平均token间延迟（毫秒）
+- `mean_e2el_ms`: 平均端到端延迟（毫秒）
+
+---
 
 ---
 
@@ -212,39 +245,6 @@ python main.py visualize --mode both --output all_charts
 
 
 
-### 聚合功能特点
-
-- **自动目录识别**: 自动按模型名称和测试时间组织结果
-- **智能选择**: 默认聚合最新的测试结果
-- **灵活指定**: 支持指定特定的结果目录进行聚合
-- **向后兼容**: 兼容旧版本的根目录JSON文件格式
-
-聚合后会在对应目录下生成汇总文件`aggregate_results_{日期}.csv`，包含该次测试的所有性能指标。
-
-### 双语输出格式
-
-生成的CSV文件采用双语格式：
-- **第1行**：英文列名
-- **第2行**：中文列名  
-- **第3行开始**：实际数据
-
-这种格式便于中英文用户理解和使用，同时保持了数据的标准化。
-
-### 输出指标说明
-
-聚合结果包含以下关键指标：
-
-- `completed`: 成功完成的请求数
-- `request_throughput`: 请求吞吐量（请求/秒）
-- `output_throughput`: 输出token吞吐量（token/秒）
-- `mean_ttft_ms`: 平均首token时间（毫秒）
-- `median_ttft_ms`: 首token时间中位数（毫秒）
-- `p99_ttft_ms`: 首token时间99百分位数（毫秒）
-- `mean_tpot_ms`: 平均每token输出时间（毫秒）
-- `mean_itl_ms`: 平均token间延迟（毫秒）
-- `mean_e2el_ms`: 平均端到端延迟（毫秒）
-
----
 
 ## 📁 项目结构
 
