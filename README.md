@@ -2,6 +2,10 @@
 
 这是一个基于[vLLM](https://github.com/vllm-project/vllm)推理引擎的性能压测框架。该工具基于vLLM官方的[benchmarks](https://github.com/vllm-project/vllm/tree/main/benchmarks)目录提供的压测工具进行开发。
 
+- **智能结果管理**: 自动按模型名称和测试时间组织结果目录
+- **灵活聚合选择**: 支持选择特定测试结果进行聚合分析
+- **统一入口脚本**: 集成批量测试、单次测试和结果聚合功能
+
 ## 📌 功能特点
 
 本工具用于评估vLLM在线推理服务的关键性能指标，包括：
@@ -17,12 +21,6 @@
 
 ## 🚀 快速开始
 
-### 新版本亮点 ⭐
-
-- **智能结果管理**: 自动按模型名称和测试时间组织结果目录
-- **灵活聚合选择**: 支持选择特定测试结果进行聚合分析
-- **统一入口脚本**: 集成批量测试、单次测试和结果聚合功能
-
 ### 三步快速体验
 
 ```bash
@@ -36,21 +34,6 @@ python main.py aggregate
 python main.py visualize
 ```
 
-### 四步完整体验
-
-```bash
-# 1. 批量压测
-python main.py batch
-
-# 2. 查看可用的结果目录
-python main.py aggregate --list
-
-# 3. 聚合指定的测试结果
-python main.py aggregate --dir DeepSeek-R1_20250728_152452
-
-# 4. 生成多种模式的可视化报告
-python main.py visualize --mode both --output comprehensive_reports
-```
 
 ### 🎯 可视化功能
 
@@ -86,20 +69,6 @@ python main.py visualize --csv results/DeepSeek-R1_20250728_152452/aggregate_res
 3. **both模式**（两种模式）
    - 同时生成simple和advanced两种报告
    - 分别保存在子目录中
-
-#### 传统方式（兼容性保留）
-```bash
-# 直接使用可视化脚本
-python src/visualize/visualize_simple.py --csv results/xxx.csv --output charts
-python src/visualize/visualize_results.py --csv results/xxx.csv --output charts
-```
-
-**生成的文件**：
-- **throughput_comparison.png** - 吞吐量对比图
-- **latency_comparison.png** - 延迟性能对比图  
-- **performance_heatmap.png** - 性能热力图
-- **comprehensive_dashboard.png** - 综合仪表板（仅advanced模式）
-- **performance_report.txt** - 详细性能报告（仅advanced模式）
 
 > **💡 提示**：推荐使用统一的`python main.py visualize`命令，支持自动查找最新CSV文件和多种报告模式。
 
@@ -181,8 +150,7 @@ concurrency_prompts:
 vllm serve deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
     --host 0.0.0.0 \
     --port 8010 \
-    --swap-space 16 \
-    --disable-log-requests
+    --swap-space 16
 ```
 
 ### 2. 使用统一入口脚本（推荐）⭐
@@ -215,53 +183,34 @@ python main.py aggregate
 python main.py aggregate --dir DeepSeek-R1_20250728_145302
 ```
 
-### 3. 使用原有方式（兼容）
-
-#### 单次压测
-```bash
-python3 src/core/benchmark_serving.py \
-    --backend vllm \
-    --model deepseek-ai/DeepSeek-R1-Distill-Qwen-32B \
-    --base-url http://localhost:8010 \
-    --dataset-name random \
-    --random-input-len 256 \
-    --random-output-len 256 \
-    --num-prompts 100 \
-    --max-concurrency 10
-```
-
-
-
 ---
 
-## 📊 结果聚合
-
-### 智能结果管理 ⭐
-
-#### 目录结构
-```
-results/
-├── DeepSeek-R1_20250728_145302/          # 批量测试结果
-│   ├── bench_io256x256_mc1_np10.json
-│   ├── bench_io512x512_mc4_np40.json
-│   └── aggregate_results_20250728.csv
-├── DeepSeek-R1_20250728_145635/          # 单次测试结果
-│   ├── single_bench_20250728_145635.json
-│   └── aggregate_results_20250728.csv
-```
-
-#### 使用方法
-
+## 📊 结果可视化
 ```bash
-# 查看可用的结果目录
-python main.py aggregate --list
+ # 生成可视化报告
+python main.py visualize                                    
 
-# 聚合最新的结果目录
-python main.py aggregate
+# 自动查找最新CSV文件，生成完整版报告
+# 指定CSV文件
+python main.py visualize --csv results/aggregate_results_20250728.csv  
 
-# 聚合指定的结果目录
-python main.py aggregate --dir DeepSeek-R1_20250728_145302
+ # 成简化版报告
+python main.py visualize --mode simple --output simple_charts         
+
+# 生成两种模式的报告
+python main.py visualize --mode both --output all_charts               
 ```
+
+**综合仪表板**
+![comprehensive_dashboard](docs/image/comprehensive_dashboard.png)
+**吞吐量对比**
+![throughput_comparison](docs/image/throughput_comparison.png)
+**延迟对比**
+![latency_comparison](docs/image/latency_comparison.png)
+**性能热力图**
+![performance_heatmap](docs/image/performance_heatmap.png)
+
+
 
 ### 聚合功能特点
 
@@ -301,51 +250,23 @@ python main.py aggregate --dir DeepSeek-R1_20250728_145302
 
 ```
 vllm_benchmark_serving/
-├── README.md                           # 项目说明文档
-├── config.yaml                         # 压测配置文件
-├── requirements.txt                    # Python依赖包
-├── main.py                            # 统一入口脚本 ⭐集成所有功能
-│
-├── src/                               # 源代码目录 ⭐新增
-│   ├── __init__.py
-│   ├── core/                          # 核心模块
-│   │   ├── __init__.py
-│   │   └── benchmark_serving.py       # 主压测引擎
-│   ├── datasets/                      # 数据集处理模块
-│   │   ├── __init__.py
-│   │   └── benchmark_dataset.py       # 数据集处理框架
-│   ├── backends/                      # 后端请求处理模块
-│   │   ├── __init__.py
-│   │   └── backend_request_func.py    # 后端请求函数
-│   ├── utils/                         # 工具函数模块
-│   │   ├── __init__.py
-│   │   └── benchmark_utils.py         # 通用工具函数
-│   ├── aggregation/                   # 结果聚合模块
-│   │   ├── __init__.py
-│   │   └── aggregate_result.py        # 结果聚合处理
-│   └── visualize/                     # 可视化模块 ⭐新增
-│       ├── __init__.py
-│       ├── visualize_results.py       # 标准可视化脚本
-│       └── visualize_simple.py        # 简化版可视化脚本（解决中文字体问题）
-│
-├── docs/                              # 文档目录 ⭐新增
-│   ├── architecture.md                # 系统架构图
-│   ├── data_flow.md                   # 数据流程图
-│   └── project_structure.md           # 项目结构说明
-│
-├── results/                           # 压测结果目录 ⭐按模型和时间组织
-│   ├── DeepSeek-R1_20250728_145302/      # 批量测试结果
-│   │   ├── bench_io256x256_mc1_np10.json
-│   │   ├── bench_io512x512_mc4_np40.json
-│   │   └── aggregate_results_20250728.csv
-│   ├── DeepSeek-R1_20250728_145635/      # 单次测试结果
-│   │   ├── single_bench_20250728_145635.json
-│   │   └── aggregate_results_20250728.csv
-│   └── aggregate_results_20250727.csv    # 兼容旧版本格式
-│
-└── .kiro/                             # Kiro IDE配置 ⭐新增
-    └── steering/
-        └── project_guidelines.md
+├── main.py                    # 统一入口：集成所有功能
+├── config.yaml               # 配置驱动：灵活的参数管理
+├── src/                      # 核心源码
+│   ├── core/                 # 压测引擎
+│   ├── backends/             # 后端适配层
+│   ├── datasets/             # 数据集处理
+│   ├── aggregation/          # 结果聚合
+│   └── visualize/            # 可视化模块
+└── results/                  # 智能结果管理
+    ├── DeepSeek-R1_20250729_223711/  # 按模型+时间组织
+    └── aggregate_results.csv         # 格式输出
+└── chart/                            # 可视化
+    ├── comprehensive_dashboard.png/  # 综合仪表板
+    └── latency_comparison.png         # 延迟对比
+    └── throughput_comparison.png      # 吞吐量对比
+    └── performance_heatmap.png        # 性能热力图
+    └── performance_report.txt         # 性能报告
 ```
 
 ---
@@ -395,75 +316,6 @@ vllm_benchmark_serving/
 - **请求数**: 确保足够的样本量（建议至少100个请求）
 - **输入长度**: 测试不同长度以评估模型在各种场景下的性能
 - **输出长度**: 考虑实际应用场景的输出长度分布
-
----
-
-## 🔧 故障排除
-
-### 中文字体显示问题
-
-#### 问题现象
-在使用高级可视化功能时，可能会遇到以下问题：
-- 图表中的中文显示为小方块或空白
-- 控制台出现大量 "Glyph missing from current font" 警告
-- 中文标签无法正确渲染
-
-#### 问题原因
-1. **系统缺少中文字体**：原始系统只有基本的西文字体，缺少支持中文字符的字体
-2. **字体字符集不完整**：即使安装了一些中文字体，但字符集可能不够完整，无法显示所有中文字符
-3. **matplotlib字体配置问题**：matplotlib需要正确配置才能使用中文字体
-
-#### 解决方案
-
-##### 方案1：安装中文字体（推荐）
-```bash
-# 安装基础中文字体
-sudo apt update
-sudo apt install -y fonts-noto-cjk fonts-wqy-zenhei fonts-wqy-microhei
-
-# 安装更完整的中文字体包（推荐）
-sudo apt install -y fonts-noto-cjk-extra fonts-arphic-ukai fonts-arphic-uming
-```
-
-##### 方案2：使用简化版可视化脚本（无需额外配置）
-```bash
-# 使用专门优化的简化版脚本，自动处理中文字体问题
-python src/visualize/visualize_simple.py \
-    --csv results/DeepSeek-R1_20250728_152452/aggregate_results_20250728.csv \
-    --output charts_output
-```
-
-简化版脚本特点：
-- ✅ **自动字体检测**：智能检测并使用最适合的中文字体
-- ✅ **英文标签优先**：主要使用英文标签，确保兼容性
-- ✅ **无外部依赖**：不需要额外的字体配置
-- ✅ **完整功能**：生成吞吐量对比、延迟对比和性能热力图
-
-#### 字体优先级说明
-系统会按以下优先级自动选择字体：
-1. **AR PL UMing CN** - 字符集最完整，推荐使用
-2. **AR PL UKai CN** - 楷体风格
-3. **WenQuanYi Micro Hei** - 文泉驿微米黑
-4. **WenQuanYi Zen Hei** - 文泉驿正黑
-5. **Noto Sans CJK** - Google Noto字体
-
-#### 验证字体安装
-```bash
-# 检查已安装的中文字体
-fc-list :lang=zh-cn | head -10
-
-# 测试字体显示效果
-python -c "
-import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
-plt.rcParams['font.sans-serif'] = ['AR PL UMing CN', 'DejaVu Sans']
-plt.figure(figsize=(8, 6))
-plt.text(0.5, 0.5, '中文字体测试', fontsize=20, ha='center')
-plt.title('Font Test / 字体测试')
-plt.savefig('font_test.png')
-print('字体测试图片已保存为 font_test.png')
-"
-```
 
 ---
 
